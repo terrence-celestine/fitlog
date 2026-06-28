@@ -1,0 +1,7 @@
+-- 3-4 users
+-- 5-6 exercises (bench press, squat, deadlift etc)
+-- 10-15 workout sessions spread across your users
+
+INSERT INTO users (name, email) VALUES ('Ryu', 'ryu@example.com'), ('Ken', 'ken@example.com'), ('Chun-Li', 'chun.li@example.com');
+INSERT INTO exercises (name, muscle_group) VALUES ('Bench Press', 'Chest'), ('Squat', 'Legs'), ('Deadlift', 'Back'), ('Incline Bench Press', 'Chest'), ('Overhead Press', 'Shoulders');
+INSERT INTO workout_sessions (user_id, exercise_id, sets, reps, weight, created_at) VALUES (1, 1, 3, 10, 45, NOW() - INTERVAL '1 day'), (1, 2, 3, 10, 65, NOW() - INTERVAL '1 day'), (1, 3, 3, 10, 85, NOW() - INTERVAL '1 day'), (1, 4, 3, 10, 105, NOW() - INTERVAL '1 day'), (1, 5, 3, 10, 125, NOW() - INTERVAL '1 day'), (2, 1, 3, 10, 45, NOW() - INTERVAL '2 days'), (2, 2, 3, 10, 65, NOW() - INTERVAL '2 days'), (2, 3, 3, 10, 85, NOW() - INTERVAL '2 days'), (2, 4, 3, 10, 105, NOW() - INTERVAL '2 days'), (2, 5, 3, 10, 125, NOW() - INTERVAL '2 days'), (3, 1, 3, 10, 45, NOW() - INTERVAL '3 days'), (3, 2, 3, 10, 65, NOW() - INTERVAL '3 days'), (3, 3, 3, 10, 85, NOW() - INTERVAL '3 days'), (3, 4, 3, 10, 105, NOW() - INTERVAL '3 days'), (3, 5, 3, 10, 125, NOW() - INTERVAL '3 days');
