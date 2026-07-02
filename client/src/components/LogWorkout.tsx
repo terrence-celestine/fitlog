@@ -1,11 +1,3 @@
-// TODO: wire up state + data fetching
-//   - fetch users        -> GET  /users
-//   - fetch exercises    -> GET  /exercises   (add endpoint)
-//   - selectedUser       -> useState
-//   - handleUserChange   -> update selectedUser
-//   - handleWorkoutSubmit-> POST /sessions { user_id, exercise_id, sets, reps, weight }
-//   - loading / error / success states
-
 import { useEffect, useState } from "react";
 
 const fieldClass =
@@ -39,7 +31,9 @@ const LogWorkout = () => {
           throw new Error(`Failed to fetch users: ${usersRes.statusText}`);
         }
         if (!exercisesRes.ok) {
-          throw new Error(`Failed to fetch exercises: ${exercisesRes.statusText}`);
+          throw new Error(
+            `Failed to fetch exercises: ${exercisesRes.statusText}`,
+          );
         }
 
         const [usersData, exercisesData] = await Promise.all([
@@ -55,7 +49,9 @@ const LogWorkout = () => {
         }
       } catch (err) {
         console.error("Error fetching initial data:", err);
-        setError(err instanceof Error ? err.message : "Failed to load initial data");
+        setError(
+          err instanceof Error ? err.message : "Failed to load initial data",
+        );
       } finally {
         setIsLoading(false);
       }
@@ -68,7 +64,9 @@ const LogWorkout = () => {
     setSelectedUser(event.target.value);
   };
 
-  const handleWorkoutSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleWorkoutSubmit = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
     event.preventDefault();
     const form = event.currentTarget;
     setIsSubmitting(true);
@@ -117,7 +115,9 @@ const LogWorkout = () => {
         sets,
         reps,
         weight,
-        created_at: dateStr ? new Date(dateStr).toISOString() : new Date().toISOString(),
+        created_at: dateStr
+          ? new Date(dateStr).toISOString()
+          : new Date().toISOString(),
       };
 
       const response = await fetch(`${import.meta.env.VITE_API_URL}/sessions`, {
@@ -130,7 +130,9 @@ const LogWorkout = () => {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Failed to log session: ${response.statusText}`);
+        throw new Error(
+          errorData.error || `Failed to log session: ${response.statusText}`,
+        );
       }
 
       setSubmitSuccess(true);
@@ -138,7 +140,9 @@ const LogWorkout = () => {
       form.reset();
     } catch (err) {
       console.error("Error logging workout session:", err);
-      setSubmitError(err instanceof Error ? err.message : "Failed to log workout session.");
+      setSubmitError(
+        err instanceof Error ? err.message : "Failed to log workout session.",
+      );
     } finally {
       setIsSubmitting(false);
     }
