@@ -4,7 +4,11 @@ import pool from "./db/client";
 
 // setup the app start
 const app = express();
-app.use(cors()); // allow cors requests
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL,
+  }),
+); // allow cors requests
 app.use(express.json()); // parse JSON
 
 // POST /users — create a user
