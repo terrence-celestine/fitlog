@@ -8,7 +8,7 @@ app.use(
   cors({
     origin: process.env.FRONTEND_URL,
   }),
-); // allow cors requests
+); // allow CORS requests
 app.use(express.json()); // parse JSON
 
 // POST /users — create a user
