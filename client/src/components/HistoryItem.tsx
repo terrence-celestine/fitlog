@@ -2,6 +2,8 @@
 
 export type WorkoutSession = {
   id: number;
+  user_id: number;
+  exercise_id: number;
   exercise: string; // TODO: join exercise name from exercise_id
   muscleGroup: string;
   sets: number;

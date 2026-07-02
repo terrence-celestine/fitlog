@@ -49,23 +49,51 @@ app.post("/api/sessions", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-// GET /sessions?user_id=1 — get all sessions for a user
-// GET /sessions?user_id=1&exercise=Bench+Press — filter by exercise
-app.get(`/api/sessions`, async (req, res) => {
+// GET /sessions — get all sessions with optional filters
+// Examples:
+//   - GET /sessions?user_id=1
+//   - GET /sessions?user_id=1&exercise=Bench+Press
+app.get("/api/sessions", async (req, res) => {
   const { user_id, exercise } = req.query;
-  let user_session;
   try {
-    if (exercise) {
-      user_session = await pool.query(
-        "SELECT ws.* FROM workout_sessions ws JOIN exercises e ON e.id = ws.exercise_id WHERE ws.user_id = $1 AND e.name = $2",
-        [user_id, exercise],
-      );
-    } else {
-      user_session = await pool.query(
-        "SELECT * FROM workout_sessions WHERE user_id = $1",
-        [user_id],
-      );
+    let queryText = `
+      SELECT 
+        ws.id, 
+        ws.user_id,
+        ws.exercise_id,
+        e.name AS exercise, 
+        e.muscle_group AS "muscleGroup", 
+        ws.sets, 
+        ws.reps, 
+        ws.weight, 
+        ws.created_at AS "createdAt"
+      FROM workout_sessions ws
+      JOIN exercises e ON e.id = ws.exercise_id
+    `;
+    const queryParams: any[] = [];
+    const conditions: string[] = [];
+
+    if (user_id) {
+      queryParams.push(user_id);
+      conditions.push(`ws.user_id = $${queryParams.length}`);
     }
+
+    if (exercise) {
+      queryParams.push(exercise);
+      if (!isNaN(Number(exercise))) {
+        conditions.push(`ws.exercise_id = $${queryParams.length}`);
+      } else {
+        conditions.push(`e.name = $${queryParams.length}`);
+      }
+    }
+
+    if (conditions.length > 0) {
+      queryText += " WHERE " + conditions.join(" AND ");
+    }
+
+    queryText += " ORDER BY ws.created_at DESC";
+
+    const user_session = await pool.query(queryText, queryParams);
     res.status(200).json(user_session.rows);
   } catch (error) {
     console.error("There was an error trying to find session", error);
