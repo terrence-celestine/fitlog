@@ -130,12 +130,21 @@ app.get("/api/users/:id/last-workout", async (req, res) => {
     res.status(500).json({ error: "There was an internal error" });
   }
 });
-app.get("/api/users", async (req, res) => {
+app.get("/api/users", async (_, res) => {
   try {
     const all_users = await pool.query("SELECT * FROM users");
     res.status(200).json(all_users.rows);
   } catch (error) {
     console.error("There was an error getting the users", error);
+    res.status(500).json({ error: "There was an internal error" });
+  }
+});
+app.get("/api/exercises", async (_, res) => {
+  try {
+    const all_exercises = await pool.query("SELECT * FROM exercises");
+    res.status(200).json(all_exercises.rows);
+  } catch (error) {
+    console.error("There was an error getting the exercises", error);
     res.status(500).json({ error: "There was an internal error" });
   }
 });

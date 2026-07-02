@@ -8,11 +8,6 @@
 
 import { useEffect, useState } from "react";
 
-// TODO: replace with data from GET /exercises
-const exercises: { id: number; name: string; muscle_group: string }[] = [
-  { id: 1, name: "Bench Press", muscle_group: "Chest" },
-];
-
 const fieldClass =
   "w-full rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-500 outline-none transition focus:border-lime-400 focus:ring-2 focus:ring-lime-400/20";
 const labelClass =
@@ -20,25 +15,137 @@ const labelClass =
 
 const LogWorkout = () => {
   const [users, setUsers] = useState<any[]>([]);
+  const [exercises, setExercises] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [selectedUser, setSelectedUser] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+
   useEffect(() => {
-    const fetchUsers = async () => {
+    const fetchData = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL}/users`);
-        const data = await response.json();
-        setUsers(data);
-      } catch (error) {
-        console.error("Error fetching users:", error);
-        setError(
-          error instanceof Error ? error.message : "Failed to load users",
-        );
+        setIsLoading(true);
+        setError(null);
+
+        const [usersRes, exercisesRes] = await Promise.all([
+          fetch(`${import.meta.env.VITE_API_URL}/users`),
+          fetch(`${import.meta.env.VITE_API_URL}/exercises`),
+        ]);
+
+        if (!usersRes.ok) {
+          throw new Error(`Failed to fetch users: ${usersRes.statusText}`);
+        }
+        if (!exercisesRes.ok) {
+          throw new Error(`Failed to fetch exercises: ${exercisesRes.statusText}`);
+        }
+
+        const [usersData, exercisesData] = await Promise.all([
+          usersRes.json(),
+          exercisesRes.json(),
+        ]);
+
+        setUsers(usersData);
+        setExercises(exercisesData);
+
+        if (usersData.length > 0) {
+          setSelectedUser(usersData[0].id.toString());
+        }
+      } catch (err) {
+        console.error("Error fetching initial data:", err);
+        setError(err instanceof Error ? err.message : "Failed to load initial data");
       } finally {
         setIsLoading(false);
       }
     };
-    fetchUsers();
+
+    fetchData();
   }, []);
+
+  const handleUserChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedUser(event.target.value);
+  };
+
+  const handleWorkoutSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    setIsSubmitting(true);
+    setSubmitError(null);
+    setSubmitSuccess(false);
+
+    const formData = new FormData(form);
+    const userId = formData.get("user") as string;
+    const exerciseId = formData.get("exercise") as string;
+    const setsStr = formData.get("sets") as string;
+    const repsStr = formData.get("reps") as string;
+    const weightStr = formData.get("weight") as string;
+    const dateStr = formData.get("date") as string;
+
+    // Validation
+    if (!userId || !exerciseId || !setsStr || !repsStr || !weightStr) {
+      setSubmitError("Please fill out all required fields.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    const sets = parseInt(setsStr, 10);
+    const reps = parseInt(repsStr, 10);
+    const weight = parseInt(weightStr, 10);
+
+    if (isNaN(sets) || sets <= 0) {
+      setSubmitError("Sets must be a positive number.");
+      setIsSubmitting(false);
+      return;
+    }
+    if (isNaN(reps) || reps <= 0) {
+      setSubmitError("Reps must be a positive number.");
+      setIsSubmitting(false);
+      return;
+    }
+    if (isNaN(weight) || weight < 0) {
+      setSubmitError("Weight must be a non-negative number.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      const payload = {
+        user_id: parseInt(userId, 10),
+        exercise_id: parseInt(exerciseId, 10),
+        sets,
+        reps,
+        weight,
+        created_at: dateStr ? new Date(dateStr).toISOString() : new Date().toISOString(),
+      };
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/sessions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to log session: ${response.statusText}`);
+      }
+
+      setSubmitSuccess(true);
+      // Reset form but keep the user selected (very common UX in gym tracking)
+      form.reset();
+    } catch (err) {
+      console.error("Error logging workout session:", err);
+      setSubmitError(err instanceof Error ? err.message : "Failed to log workout session.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const todayStr = new Date().toISOString().split("T")[0];
+
   if (isLoading) {
     return (
       <div className="space-y-8">
@@ -90,6 +197,7 @@ const LogWorkout = () => {
       </div>
     );
   }
+
   return (
     <div className="space-y-8">
       {/* Page heading */}
@@ -103,7 +211,7 @@ const LogWorkout = () => {
       </div>
 
       <form
-        /* TODO: onSubmit={handleWorkoutSubmit} */
+        onSubmit={handleWorkoutSubmit}
         className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6 shadow-xl shadow-black/20 sm:p-8"
       >
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -115,7 +223,8 @@ const LogWorkout = () => {
             <select
               id="user"
               name="user"
-              /* TODO: value + onChange={handleUserChange} */
+              value={selectedUser}
+              onChange={handleUserChange}
               className={fieldClass}
             >
               {users.map((user) => (
@@ -153,7 +262,8 @@ const LogWorkout = () => {
               id="sets"
               name="sets"
               type="number"
-              min={0}
+              min={1}
+              required
               placeholder="3"
               className={fieldClass}
             />
@@ -168,7 +278,8 @@ const LogWorkout = () => {
               id="reps"
               name="reps"
               type="number"
-              min={0}
+              min={1}
+              required
               placeholder="10"
               className={fieldClass}
             />
@@ -184,6 +295,7 @@ const LogWorkout = () => {
               name="weight"
               type="number"
               min={0}
+              required
               placeholder="135"
               className={fieldClass}
             />
@@ -194,23 +306,45 @@ const LogWorkout = () => {
             <label htmlFor="date" className={labelClass}>
               Date
             </label>
-            <input id="date" name="date" type="date" className={fieldClass} />
+            <input
+              id="date"
+              name="date"
+              type="date"
+              defaultValue={todayStr}
+              className={fieldClass}
+            />
           </div>
         </div>
+
+        {/* Submit Error Message */}
+        {submitError && (
+          <div className="mt-5 rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-sm text-red-400">
+            {submitError}
+          </div>
+        )}
+
+        {/* Submit Success Message */}
+        {submitSuccess && (
+          <div className="mt-5 rounded-xl border border-lime-500/30 bg-lime-500/5 px-4 py-3 text-sm text-lime-400">
+            Workout session logged successfully! Keep up the great work! 💪
+          </div>
+        )}
 
         {/* Actions */}
         <div className="mt-8 flex items-center justify-end gap-3">
           <button
             type="reset"
-            className="rounded-xl px-4 py-2.5 text-sm font-semibold text-zinc-400 transition hover:text-zinc-100"
+            disabled={isSubmitting}
+            className="rounded-xl px-4 py-2.5 text-sm font-semibold text-zinc-400 transition hover:text-zinc-100 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Clear
           </button>
           <button
             type="submit"
-            className="rounded-xl bg-lime-400 px-6 py-2.5 text-sm font-bold text-zinc-950 transition hover:bg-lime-300 focus:outline-none focus:ring-2 focus:ring-lime-400/40"
+            disabled={isSubmitting}
+            className="rounded-xl bg-lime-400 px-6 py-2.5 text-sm font-bold text-zinc-950 transition hover:bg-lime-300 focus:outline-none focus:ring-2 focus:ring-lime-400/40 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Log Workout
+            {isSubmitting ? "Logging..." : "Log Workout"}
           </button>
         </div>
       </form>
