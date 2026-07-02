@@ -4,7 +4,7 @@ export type WorkoutSession = {
   id: number;
   user_id: number;
   exercise_id: number;
-  exercise: string; // TODO: join exercise name from exercise_id
+  exercise: string;
   muscleGroup: string;
   sets: number;
   reps: number;
@@ -25,8 +25,7 @@ const HistoryItem = ({ session }: { session: WorkoutSession }) => {
             {session.exercise}
           </p>
           <p className="text-xs text-zinc-400">
-            {session.muscleGroup} ·{" "}
-            {/* TODO: format createdAt */}
+            {session.muscleGroup} · {/* TODO: format createdAt */}
             {new Date(session.createdAt).toLocaleDateString()}
           </p>
         </div>
