@@ -163,6 +163,28 @@ Functionally identical — Drizzle wraps identifiers in quotes and aliases colum
 
 ---
 
+Three queries compared:
+
+GET /users — SELECT \* FROM users vs Drizzle selecting specific columns with quoted identifiers
+GET /exercises — same pattern
+GET /leaderboard — biggest difference: Drizzle groups by users.id instead of users.name, and quotes every identifier
+
+Key takeaways to document:
+
+Drizzle never uses SELECT \* — always explicit columns
+Every identifier gets quoted: "users"."id" not users.id
+GROUP BY uses primary key not the selected column — functionally the same but different SQL
+DISTINCT ON is impossible in Drizzle — last-workouts-fixed had to stay raw SQL
+
+When to go around the ORM:
+
+DISTINCT ON queries
+Window functions
+Complex CTEs
+Any query where you need Postgres-specific syntax
+
+---
+
 ## Local Setup
 
 ```bash
