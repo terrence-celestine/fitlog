@@ -108,7 +108,7 @@ app.get("/api/sessions", async (req, res) => {
 app.get("/api/leaderboard", async (req, res) => {
   try {
     const all_users = await db
-      .select()
+      .select({ name: users.name, total_sessions: count(workout_sessions.id) })
       .from(users)
       .leftJoin(workout_sessions, eq(users.id, workout_sessions.user_id))
       .groupBy(users.id)
