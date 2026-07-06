@@ -107,7 +107,7 @@ Running `EXPLAIN ANALYZE` on the leaderboard query before and after adding an in
 
 ```
 Seq Scan on workout_sessions
-  cost=0.00..2145.00 rows=1 width=48
+  cost=0.006..0.008ms rows=1 width=48
   actual time=0.043..18.721 ms
 ```
 
@@ -122,6 +122,16 @@ Index Scan using idx_sessions_user_id on workout_sessions
 Postgres was scanning every row to find sessions for a given user. The index lets it jump directly to the matching rows.
 
 **Composite index** added on `(user_id, created_at)` for queries that filter by user and sort by date — equality column first, range column second.
+
+What we found:
+With only 18 rows, Postgres ignored both indexes and chose a seq scan — correctly. A seq scan on a small table is faster than the overhead of an index lookup.
+Forced the index with SET enable_seqscan = off to verify behavior:
+
+Seq scan execution time: 0.134ms
+Index scan execution time: 0.091ms
+
+At scale the difference compounds. With millions of rows, Postgres would choose the index automatically.
+Composite index column order matters — user_id first (equality filter), created_at second (sort/range). Flipping the order makes the index far less useful for queries that filter by user and order by date.
 
 ---
 

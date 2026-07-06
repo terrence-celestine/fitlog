@@ -1,6 +1,6 @@
-import HistoryList from "./HistoryList";
-import type { WorkoutSession } from "./HistoryItem";
 import { useEffect, useState } from "react";
+import type { WorkoutSession } from "./HistoryItem";
+import HistoryList from "./HistoryList";
 
 const fieldClass =
   "rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-100 outline-none transition focus:border-lime-400 focus:ring-2 focus:ring-lime-400/20";
@@ -52,7 +52,6 @@ const WorkoutHistory = () => {
         setSessions(sessionsData);
         setFilteredSessions(sessionsData);
         setExercises(exercisesData);
-        console.log(usersData);
         if (usersData.length > 0) {
           setSelectedUser(usersData[0].id.toString());
         }

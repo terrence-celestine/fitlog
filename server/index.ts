@@ -1,7 +1,9 @@
-import express from "express";
 import cors from "cors";
+import { count, desc, eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
+import express from "express";
 import pool from "./db/client";
-
+import { exercises, users, workout_sessions } from "./db/schema";
 // setup the app start
 const app = express();
 app.use(
@@ -10,16 +12,13 @@ app.use(
   }),
 ); // allow CORS requests
 app.use(express.json()); // parse JSON
-
+const db = drizzle(pool, { logger: true });
 // POST /users — create a user
 app.post("/api/users", async (req, res) => {
   const { name, email } = req.body;
   try {
-    const user = await pool.query(
-      "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *",
-      [name, email],
-    );
-    res.status(201).json(user.rows[0]);
+    const user = await db.insert(users).values({ name, email }).returning();
+    res.status(201).json(user[0]);
   } catch (error) {
     console.error("There was an error creating the user", error);
     res.status(500).json({ error: "Internal server error" });
@@ -29,11 +28,12 @@ app.post("/api/users", async (req, res) => {
 app.post("/api/exercises", async (req, res) => {
   const { name, muscle_group } = req.body;
   try {
-    const work_out = await pool.query(
-      "INSERT INTO exercises (name, muscle_group) VALUES ($1, $2) RETURNING *",
-      [name, muscle_group],
-    );
-    res.status(201).json(work_out.rows[0]);
+    const work_out = await db
+      .insert(exercises)
+      .values({ name, muscle_group })
+      .returning();
+
+    res.status(201).json(work_out);
   } catch (error) {
     console.error("There was an error creating the workout", error);
     res.status(500).json({ error: "Internal server error" });
@@ -43,11 +43,11 @@ app.post("/api/exercises", async (req, res) => {
 app.post("/api/sessions", async (req, res) => {
   const { user_id, exercise_id, sets, reps, weight, created_at } = req.body;
   try {
-    const created_session = await pool.query(
-      "INSERT INTO workout_sessions (user_id, exercise_id, sets, reps, weight, created_at) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
-      [user_id, exercise_id, sets, reps, weight, created_at],
-    );
-    res.status(201).json(created_session.rows[0]);
+    const created_session = await db
+      .insert(workout_sessions)
+      .values({ user_id, exercise_id, sets, reps, weight, created_at })
+      .returning();
+    res.status(201).json(created_session[0]);
   } catch (error) {
     console.error("There was an error creating the workout session", error);
     res.status(500).json({ error: "Internal server error" });
@@ -107,10 +107,13 @@ app.get("/api/sessions", async (req, res) => {
 // GET /leaderboard — all users ranked by total sessions this week
 app.get("/api/leaderboard", async (req, res) => {
   try {
-    const all_users = await pool.query(
-      "SELECT u.name, COUNT(ws.id) as total_sessions FROM users u LEFT JOIN workout_sessions ws ON ws.user_id = u.id GROUP BY u.name ORDER BY total_sessions DESC",
-    );
-    res.status(200).json(all_users.rows);
+    const all_users = await db
+      .select()
+      .from(users)
+      .leftJoin(workout_sessions, eq(users.id, workout_sessions.user_id))
+      .groupBy(users.id)
+      .orderBy(desc(count(workout_sessions.id)));
+    res.status(200).json(all_users);
   } catch (error) {
     console.error("There was an error getting the leaderboard", error);
     res.status(500).json({ error: "Internal server error" });
@@ -119,17 +122,18 @@ app.get("/api/leaderboard", async (req, res) => {
 app.get("/api/users/last-workouts", async (req, res) => {
   try {
     const all_users = await pool.query("SELECT * FROM users");
-    console.log("Query 1: fetched all users");
     for (const user of all_users.rows) {
-      const user_last_workout = await pool.query(
-        "SELECT ws.* FROM workout_sessions ws WHERE ws.user_id = $1 ORDER BY created_at DESC LIMIT 1",
-        [user.id],
-      );
+      const user_last_workout = await db
+        .select()
+        .from(workout_sessions)
+        .where(eq(workout_sessions.user_id, user.id))
+        .orderBy(desc(workout_sessions.created_at))
+        .limit(1);
+
       console.log(
         `Query ${all_users.rows.indexOf(user) + 2}: fetched last workout for user ${user.id}`,
       );
-
-      user.last_workout = user_last_workout.rows[0];
+      user.last_workout = user_last_workout[0];
     }
     res.status(200).json(all_users.rows);
   } catch (error) {
@@ -152,11 +156,13 @@ app.get("/api/users/last-workouts-fixed", async (req, res) => {
 app.get("/api/users/:id/last-workout", async (req, res) => {
   const { id } = req.params;
   try {
-    const allWorkout = await pool.query(
-      "SELECT * FROM workout_sessions ws WHERE ws.user_id = $1 ORDER BY ws.created_at DESC LIMIT 1",
-      [id],
-    );
-    res.status(200).json(allWorkout.rows[0]);
+    const allWorkout = await db
+      .select()
+      .from(workout_sessions)
+      .where(eq(workout_sessions.user_id, Number(id)))
+      .orderBy(desc(workout_sessions.created_at))
+      .limit(1);
+    res.status(200).json(allWorkout[0]);
   } catch (error) {
     console.error("There was an error getting the last workout", error);
     res.status(500).json({ error: "There was an internal error" });
@@ -164,8 +170,8 @@ app.get("/api/users/:id/last-workout", async (req, res) => {
 });
 app.get("/api/users", async (_, res) => {
   try {
-    const all_users = await pool.query("SELECT * FROM users");
-    res.status(200).json(all_users.rows);
+    const all_users = await db.select().from(users);
+    res.status(200).json(all_users);
   } catch (error) {
     console.error("There was an error getting the users", error);
     res.status(500).json({ error: "There was an internal error" });
@@ -173,8 +179,8 @@ app.get("/api/users", async (_, res) => {
 });
 app.get("/api/exercises", async (_, res) => {
   try {
-    const all_exercises = await pool.query("SELECT * FROM exercises");
-    res.status(200).json(all_exercises.rows);
+    const all_exercises = await db.select().from(exercises);
+    res.status(200).json(all_exercises);
   } catch (error) {
     console.error("There was an error getting the exercises", error);
     res.status(500).json({ error: "There was an internal error" });
