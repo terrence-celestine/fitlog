@@ -58,22 +58,22 @@ app.post("/api/sessions", async (req, res) => {
 //   - GET /sessions?user_id=1
 //   - GET /sessions?user_id=1&exercise=Bench+Press
 app.get("/api/sessions", async (req, res) => {
-  const { user_id, exercise } = req.query;
+  const { user_id, exercise, limit, page } = req.query;
   try {
     let queryText = `
-      SELECT 
-        ws.id, 
-        ws.user_id,
-        ws.exercise_id,
-        e.name AS exercise, 
-        e.muscle_group AS "muscleGroup", 
-        ws.sets, 
-        ws.reps, 
-        ws.weight, 
-        ws.created_at AS "createdAt"
-      FROM workout_sessions ws
-      JOIN exercises e ON e.id = ws.exercise_id
-    `;
+        SELECT 
+          ws.id, 
+          ws.user_id,
+          ws.exercise_id,
+          e.name AS exercise, 
+          e.muscle_group AS "muscleGroup", 
+          ws.sets, 
+          ws.reps, 
+          ws.weight, 
+          ws.created_at AS "createdAt"
+        FROM workout_sessions ws
+        JOIN exercises e ON e.id = ws.exercise_id
+      `;
     const queryParams: any[] = [];
     const conditions: string[] = [];
 
@@ -96,9 +96,33 @@ app.get("/api/sessions", async (req, res) => {
     }
 
     queryText += " ORDER BY ws.created_at DESC";
+    if (page) {
+      const offset = (Number(page) - 1) * Number(limit);
+      queryParams.push(offset);
+      queryText += ` OFFSET $${queryParams.length}`;
+    }
+
+    if (limit) {
+      const limitNumber = Number(limit);
+      queryParams.push(limitNumber);
+      queryText += ` LIMIT $${queryParams.length}`;
+    }
 
     const user_session = await pool.query(queryText, queryParams);
-    res.status(200).json(user_session.rows);
+    const countResult = await pool.query(
+      `SELECT COUNT(*) FROM workout_sessions ws
+       JOIN exercises e ON e.id = ws.exercise_id
+       WHERE ws.user_id = $1`,
+      [user_id],
+    );
+
+    const total = countResult.rows[0];
+    res.status(200).json({
+      sessions: user_session.rows,
+      total: Number(total.count),
+      page: Number(page),
+      limit: Number(limit),
+    });
   } catch (error) {
     console.error("There was an error trying to find session", error);
     res.status(500).json({ error: "Internal server error" });

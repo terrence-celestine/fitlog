@@ -6,7 +6,7 @@ const fieldClass =
   "rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-100 outline-none transition focus:border-lime-400 focus:ring-2 focus:ring-lime-400/20";
 
 const WorkoutHistory = () => {
-  const [selectedUser, setSelectedUser] = useState<string>("");
+  const [selectedUser, setSelectedUser] = useState<number>(1);
   const [users, setUsers] = useState<any[]>([]);
   const [sessions, setSessions] = useState<WorkoutSession[]>([]);
   const [filteredSessions, setFilteredSessions] = useState<WorkoutSession[]>(
@@ -16,6 +16,9 @@ const WorkoutHistory = () => {
   const [selectedExercise, setSelectedExercise] = useState<string>("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState<number>(1);
+  const [limit, setLimit] = useState<number>(10);
+  const [total, setTotal] = useState<number>(0);
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -24,7 +27,9 @@ const WorkoutHistory = () => {
 
         const [usersRes, sessionsRes, exercisesRes] = await Promise.all([
           fetch(`${import.meta.env.VITE_API_URL}/users`),
-          fetch(`${import.meta.env.VITE_API_URL}/sessions`),
+          fetch(
+            `${import.meta.env.VITE_API_URL}/sessions?page=${page}&limit=${limit}&user_id=${selectedUser}`,
+          ),
           fetch(`${import.meta.env.VITE_API_URL}/exercises`),
         ]);
 
@@ -49,11 +54,13 @@ const WorkoutHistory = () => {
         ]);
 
         setUsers(usersData);
-        setSessions(sessionsData);
-        setFilteredSessions(sessionsData);
+        setSessions(sessionsData.sessions);
+        setTotal(sessionsData.total);
+        setLimit(sessionsData.limit);
+        setFilteredSessions(sessionsData.sessions);
         setExercises(exercisesData);
         if (usersData.length > 0) {
-          setSelectedUser(usersData[0].id.toString());
+          setSelectedUser(usersData[0].id);
         }
       } catch (err) {
         console.error("Error fetching initial data:", err);
@@ -66,14 +73,12 @@ const WorkoutHistory = () => {
     };
 
     fetchData();
-  }, []);
+  }, [page, limit]);
   useEffect(() => {
     let filtered = sessions;
 
     if (selectedUser) {
-      filtered = filtered.filter(
-        (session) => session.user_id === parseInt(selectedUser, 10),
-      );
+      filtered = filtered.filter((session) => session.user_id === selectedUser);
     }
 
     if (selectedExercise && selectedExercise !== "All exercises") {
@@ -168,7 +173,7 @@ const WorkoutHistory = () => {
             aria-label="Filter by user"
             className={fieldClass}
             value={selectedUser}
-            onChange={(event) => setSelectedUser(event.target.value)}
+            onChange={(event) => setSelectedUser(Number(event.target.value))}
           >
             {users.map((user) => (
               <option key={user.id} value={user.id}>
@@ -193,6 +198,29 @@ const WorkoutHistory = () => {
       </div>
 
       <HistoryList sessions={filteredSessions} />
+      {total > 0 && (
+        <div className="flex items-center justify-between border-t border-zinc-800 pt-4">
+          <button
+            type="button"
+            onClick={() => setPage(page - 1)}
+            disabled={page === 1}
+            className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-zinc-800 disabled:hover:bg-zinc-900/60"
+          >
+            Previous
+          </button>
+          <span className="text-sm text-zinc-400">
+            Page {page} of {Math.max(Math.ceil(total / limit), 1)}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage(page + 1)}
+            disabled={page >= Math.ceil(total / limit)}
+            className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-2 text-sm font-semibold text-zinc-200 transition hover:border-zinc-700 hover:bg-zinc-900 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-zinc-800 disabled:hover:bg-zinc-900/60"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 };
