@@ -177,6 +177,42 @@ app.get("/api/users", async (_, res) => {
     res.status(500).json({ error: "There was an internal error" });
   }
 });
+// GET all exercise by query
+app.get("/api/search", async (req, res) => {
+  const { q, type } = req.query;
+  let queryText;
+  if (type === "exercise") {
+    queryText = `SELECT * FROM exercises WHERE to_tsvector('english', name) @@ to_tsquery('english', $1)`;
+  } else if (type === "user") {
+    queryText = `SELECT * FROM users WHERE to_tsvector('english', name) @@ to_tsquery('english', $1)`;
+  } else if (type === "session") {
+    queryText = `
+    SELECT 
+      ws.id, 
+      ws.user_id,
+      ws.exercise_id,
+      e.name AS exercise, 
+      e.muscle_group AS "muscleGroup", 
+      ws.sets, 
+      ws.reps, 
+      ws.weight, 
+      ws.created_at AS "createdAt"
+    FROM workout_sessions ws
+    JOIN exercises e ON e.id = ws.exercise_id
+    WHERE to_tsvector('english', e.name) @@ to_tsquery('english', $1)
+  `;
+  } else {
+    res.status(400).json({ error: "Invalid type" });
+    return;
+  }
+  try {
+    const all_exercise = await pool.query(queryText as string, [q]);
+    res.status(200).json(all_exercise.rows);
+  } catch (error) {
+    console.error("There was an error getting the exercises", error);
+    res.status(500).json({ error: "There was an internal error" });
+  }
+});
 app.get("/api/exercises", async (_, res) => {
   try {
     const all_exercises = await db.select().from(exercises);
