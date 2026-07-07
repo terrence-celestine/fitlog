@@ -4,6 +4,7 @@ const links = [
   { to: "/", label: "Log Workout" },
   { to: "/workout-history", label: "History" },
   { to: "/leaderboard", label: "Leaderboard" },
+  { to: "/search", label: "Search" },
 ];
 
 const Header = () => {
