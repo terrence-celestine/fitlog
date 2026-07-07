@@ -246,6 +246,37 @@ app.get("/api/exercises", async (_, res) => {
     res.status(500).json({ error: "There was an internal error" });
   }
 });
+app.get("/api/personal-records", async (req, res) => {
+  const { user_id } = req.query;
+  if (!user_id) {
+    res.status(400).json({ error: "User ID is required" });
+    return;
+  }
+  try {
+    const personal_records = await pool.query(
+      `SELECT DISTINCT ON (exercise_id)
+        ws.user_id,
+        ws.exercise_id,
+        e.name AS exercise,
+        e.muscle_group,
+        ws.weight AS personal_record,
+        ws.sets,
+        ws.reps,
+        ws.created_at
+      FROM workout_sessions ws
+      JOIN exercises e ON e.id = ws.exercise_id
+      WHERE ws.user_id = $1
+      ORDER BY ws.exercise_id, ws.weight DESC`,
+      [Number(user_id)],
+    );
+    res.status(200).json(personal_records.rows);
+  } catch (error) {
+    console.error("There was an error getting the personal records", error);
+    res
+      .status(500)
+      .json({ error: "There was an internal error", details: error });
+  }
+});
 // start the server
 const port = process.env.PORT || 3000;
 app.listen(port, () => {

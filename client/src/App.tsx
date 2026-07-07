@@ -4,6 +4,7 @@ import WorkoutHistory from "./components/History";
 import Layout from "./components/Layout";
 import Leaderboard from "./components/Leaderboard";
 import LogWorkout from "./components/LogWorkout";
+import PersonalRecords from "./components/PersonalRecords";
 import Search from "./components/Search";
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
           <Route path="/workout-history" element={<WorkoutHistory />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/search" element={<Search />} />
+          <Route path="/personal-records" element={<PersonalRecords />} />
         </Route>
       </Routes>
     </BrowserRouter>
