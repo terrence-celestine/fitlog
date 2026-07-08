@@ -28,3 +28,13 @@ CREATE TABLE workout_sessions (
     weight INT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- goals — one active goal per user+exercise, upserted rather than a history
+CREATE TABLE goals (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES users(id),
+    exercise_id INT NOT NULL REFERENCES exercises(id),
+    target_weight INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, exercise_id)
+);

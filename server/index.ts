@@ -312,6 +312,73 @@ app.get("/api/progress", async (req, res) => {
       .json({ error: "There was an internal error", details: error });
   }
 });
+app.post("/api/goals", async (req, res) => {
+  const { user_id, exercise_id, target_weight } = req.body;
+  if (!user_id || !exercise_id || !target_weight) {
+    res
+      .status(400)
+      .json({ error: "user_id, exercise_id, and target_weight are required" });
+    return;
+  }
+  if (Number(target_weight) <= 0) {
+    res.status(400).json({ error: "target_weight must be a positive number" });
+    return;
+  }
+  try {
+    const result = await pool.query(
+      `INSERT INTO goals (user_id, exercise_id, target_weight)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id, exercise_id)
+       DO UPDATE SET target_weight = EXCLUDED.target_weight
+       RETURNING *`,
+      [Number(user_id), Number(exercise_id), Number(target_weight)],
+    );
+    res.status(200).json(result.rows[0]);
+  } catch (error) {
+    console.error("There was an error setting the goal", error);
+    res
+      .status(500)
+      .json({ error: "There was an internal error", details: error });
+  }
+});
+app.get("/api/goals", async (req, res) => {
+  const { user_id } = req.query;
+  if (!user_id) {
+    res.status(400).json({ error: "user_id is required" });
+    return;
+  }
+  try {
+    const result = await pool.query(
+      `SELECT
+         g.id,
+         g.user_id,
+         g.exercise_id,
+         e.name AS exercise,
+         e.muscle_group,
+         g.target_weight,
+         COALESCE(best.current_best_weight, 0) AS current_best_weight,
+         g.created_at
+       FROM goals g
+       JOIN exercises e ON e.id = g.exercise_id
+       LEFT JOIN (
+         SELECT DISTINCT ON (exercise_id)
+           exercise_id, weight AS current_best_weight
+         FROM workout_sessions
+         WHERE user_id = $1
+         ORDER BY exercise_id, weight DESC
+       ) best ON best.exercise_id = g.exercise_id
+       WHERE g.user_id = $1
+       ORDER BY g.created_at DESC`,
+      [Number(user_id)],
+    );
+    res.status(200).json(result.rows);
+  } catch (error) {
+    console.error("There was an error getting the goals", error);
+    res
+      .status(500)
+      .json({ error: "There was an internal error", details: error });
+  }
+});
 // start the server
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
