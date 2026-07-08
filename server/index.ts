@@ -277,6 +277,41 @@ app.get("/api/personal-records", async (req, res) => {
       .json({ error: "There was an internal error", details: error });
   }
 });
+app.get("/api/progress", async (req, res) => {
+  const { user_id, exercise_id } = req.query;
+  if (!user_id || !exercise_id) {
+    res.status(400).json({ error: "user_id and exercise_id are required" });
+    return;
+  }
+  try {
+    const progress = await pool.query(
+      `SELECT
+         ws.id,
+         ws.created_at,
+         ws.weight,
+         ws.sets,
+         ws.reps,
+         (ws.sets * ws.reps * ws.weight) AS volume,
+         MAX(ws.weight) OVER (
+           ORDER BY ws.created_at ASC
+           ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+         ) AS running_max_weight,
+         e.name AS exercise,
+         e.muscle_group
+       FROM workout_sessions ws
+       JOIN exercises e ON e.id = ws.exercise_id
+       WHERE ws.user_id = $1 AND ws.exercise_id = $2
+       ORDER BY ws.created_at ASC`,
+      [Number(user_id), Number(exercise_id)],
+    );
+    res.status(200).json(progress.rows);
+  } catch (error) {
+    console.error("There was an error getting progress data", error);
+    res
+      .status(500)
+      .json({ error: "There was an internal error", details: error });
+  }
+});
 // start the server
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
