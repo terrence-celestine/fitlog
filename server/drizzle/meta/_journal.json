@@ -8,6 +8,13 @@
       "when": 1783557614602,
       "tag": "0000_illegal_ogun",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1783569432916,
+      "tag": "0001_illegal_jasper_sitwell",
+      "breakpoints": true
     }
   ]
 }

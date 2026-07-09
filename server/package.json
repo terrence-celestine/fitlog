@@ -9,7 +9,11 @@
     "server": "npx nodemon --exec ts-node index.ts",
     "client": "cd ../client && npm run dev",
     "start": "node dist/index.js",
-    "build": "tsc"
+    "build": "tsc",
+    "db:seed-users": "ts-node db/seed-users.ts",
+    "db:seed-exercises": "ts-node db/seed-exercises.ts",
+    "db:seed-sessions": "ts-node db/seed-sessions.ts",
+    "db:studio": "drizzle-kit studio"
   },
   "keywords": [],
   "author": "",
@@ -23,6 +27,7 @@
     "pg": "^8.22.0"
   },
   "devDependencies": {
+    "@faker-js/faker": "^10.5.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^26.0.1",
