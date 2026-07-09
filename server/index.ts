@@ -233,10 +233,32 @@ app.get("/api/users/:id/last-workout", async (req, res) => {
     res.status(500).json({ error: "There was an internal error" });
   }
 });
-app.get("/api/users", async (_, res) => {
+app.get("/api/users", async (req, res) => {
+  const { q, limit } = req.query;
+  const MAX_LIMIT = 20;
+  const DEFAULT_LIMIT = 8;
+
   try {
-    const all_users = await db.select().from(users);
-    res.status(200).json(all_users);
+    let queryText = `SELECT id, name, email FROM users`;
+    const queryParams: any[] = [];
+
+    if (q) {
+      queryParams.push(`${q}%`);
+      queryText += ` WHERE name ILIKE $${queryParams.length}`;
+    }
+
+    queryText += " ORDER BY name ASC";
+
+    const requestedLimit = Number(limit);
+    const safeLimit =
+      Number.isFinite(requestedLimit) && requestedLimit > 0
+        ? Math.min(requestedLimit, MAX_LIMIT)
+        : DEFAULT_LIMIT;
+    queryParams.push(safeLimit);
+    queryText += ` LIMIT $${queryParams.length}`;
+
+    const result = await pool.query(queryText, queryParams);
+    res.status(200).json(result.rows);
   } catch (error) {
     console.error("There was an error getting the users", error);
     res.status(500).json({ error: "There was an internal error" });
