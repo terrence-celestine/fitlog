@@ -28,6 +28,7 @@ app.get("/api/users/aggregate/:id", async (req, res) => {
     res.status(400).json({ error: "User ID is required" });
     return;
   }
+  const userId = Number(id);
   try {
     const aggregate_query = `
         SELECT COUNT(workout_sessions.id) AS total_sessions,
@@ -55,7 +56,7 @@ app.get("/api/users/aggregate/:id", async (req, res) => {
         JOIN exercises ON exercises.id = workout_sessions.exercise_id
         WHERE workout_sessions.user_id = $1 AND workout_sessions.deleted_at IS NULL
         `;
-    const result = await pool.query(aggregate_query, [id]);
+    const result = await pool.query(aggregate_query, [userId]);
     res.status(200).json(result.rows[0]);
   } catch (error) {
     console.error("There was an error getting the aggregates", error);
