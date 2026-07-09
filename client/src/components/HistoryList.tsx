@@ -1,6 +1,16 @@
-import HistoryItem, { type WorkoutSession } from "./HistoryItem";
+import HistoryItem, { type Exercise, type WorkoutSession } from "./HistoryItem";
 
-const HistoryList = ({ sessions }: { sessions: WorkoutSession[] }) => {
+const HistoryList = ({
+  sessions,
+  exercises,
+  onSessionDeleted,
+  onSessionUpdated,
+}: {
+  sessions: WorkoutSession[];
+  exercises: Exercise[];
+  onSessionDeleted: (session: WorkoutSession) => void;
+  onSessionUpdated: () => void;
+}) => {
   // Empty state
   if (sessions.length === 0) {
     return (
@@ -19,7 +29,13 @@ const HistoryList = ({ sessions }: { sessions: WorkoutSession[] }) => {
   return (
     <ul className="space-y-3">
       {sessions.map((session) => (
-        <HistoryItem key={session.id} session={session} />
+        <HistoryItem
+          key={session.id}
+          session={session}
+          exercises={exercises}
+          onDeleted={onSessionDeleted}
+          onUpdated={onSessionUpdated}
+        />
       ))}
     </ul>
   );

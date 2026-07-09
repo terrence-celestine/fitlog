@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { NavLink } from "react-router-dom";
 
 type NavLinkItem = { to: string; label: string };
@@ -29,8 +30,8 @@ const MobileMenu = ({ links, isOpen, onClose }: MobileMenuProps) => {
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-30 md:hidden">
+  return createPortal(
+    <div className="fixed inset-0 z-30 md:hidden ">
       <button
         type="button"
         aria-label="Close menu"
@@ -39,7 +40,7 @@ const MobileMenu = ({ links, isOpen, onClose }: MobileMenuProps) => {
       />
       <nav
         aria-label="Mobile"
-        className="absolute right-0 top-0 flex h-full w-72 max-w-[80%] flex-col gap-1 border-l border-zinc-800 bg-zinc-950 p-4 shadow-2xl"
+        className="absolute right-0 top-0 flex h-full w-72 max-w-[80%] flex-col gap-1 border-l border-zinc-800 bg-zinc-950 p-4 shadow-2xl "
       >
         <div className="mb-2 flex items-center justify-between">
           <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
@@ -81,7 +82,8 @@ const MobileMenu = ({ links, isOpen, onClose }: MobileMenuProps) => {
           </NavLink>
         ))}
       </nav>
-    </div>
+    </div>,
+    document.body,
   );
 };
 

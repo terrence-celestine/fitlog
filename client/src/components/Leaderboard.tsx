@@ -94,7 +94,7 @@ const Leaderboard = () => {
           Leaderboard
         </h1>
         <p className="mt-1 text-sm text-zinc-400">
-          Ranked by total sessions this week. Keep grinding.
+          Ranked by total sessions of all-time. Keep grinding.
         </p>
       </div>
 

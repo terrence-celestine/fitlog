@@ -45,7 +45,14 @@ app.post("/api/sessions", async (req, res) => {
   try {
     const created_session = await db
       .insert(workout_sessions)
-      .values({ user_id, exercise_id, sets, reps, weight, created_at })
+      .values({
+        user_id,
+        exercise_id,
+        sets,
+        reps,
+        weight,
+        created_at: created_at ? new Date(created_at) : undefined,
+      })
       .returning();
     res.status(201).json(created_session[0]);
   } catch (error) {
@@ -70,7 +77,29 @@ app.delete("/api/sessions/:id", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-// PATCH /sessions/:id — update a session so it comes back
+// PATCH /sessions/:id — update a session's exercise/sets/reps/weight/date
+app.patch("/api/sessions/:id", async (req, res) => {
+  const { id } = req.params;
+  const { exercise_id, sets, reps, weight, created_at } = req.body;
+  try {
+    const updated_session = await db
+      .update(workout_sessions)
+      .set({
+        exercise_id,
+        sets,
+        reps,
+        weight,
+        created_at: created_at ? new Date(created_at) : undefined,
+      })
+      .where(eq(workout_sessions.id, Number(id)))
+      .returning();
+    res.status(200).json(updated_session[0]);
+  } catch (error) {
+    console.error("There was an error trying to update session", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+// PATCH /sessions/:id/restore — update a session so it comes back
 app.patch("/api/sessions/:id/restore", async (req, res) => {
   const { id } = req.params;
   try {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { WorkoutSession } from "./HistoryItem";
 import HistoryList from "./HistoryList";
 import UserPicker from "./UserPicker";
@@ -19,54 +19,95 @@ const WorkoutHistory = () => {
   const [page, setPage] = useState<number>(1);
   const [limit, setLimit] = useState<number>(10);
   const [total, setTotal] = useState<number>(0);
-  useEffect(() => {
+  const [deletedSession, setDeletedSession] = useState<WorkoutSession | null>(
+    null,
+  );
+  const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fetchData = useCallback(async () => {
     if (selectedUser === null) return;
 
-    const fetchData = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
+    try {
+      setIsLoading(true);
+      setError(null);
 
-        const [sessionsRes, exercisesRes] = await Promise.all([
-          fetch(
-            `${import.meta.env.VITE_API_URL}/sessions?page=${page}&limit=${limit}&user_id=${selectedUser}`,
-          ),
-          fetch(`${import.meta.env.VITE_API_URL}/exercises`),
-        ]);
+      const [sessionsRes, exercisesRes] = await Promise.all([
+        fetch(
+          `${import.meta.env.VITE_API_URL}/sessions?page=${page}&limit=${limit}&user_id=${selectedUser}`,
+        ),
+        fetch(`${import.meta.env.VITE_API_URL}/exercises`),
+      ]);
 
-        if (!sessionsRes.ok) {
-          throw new Error(
-            `Failed to fetch sessions: ${sessionsRes.statusText}`,
-          );
-        }
-        if (!exercisesRes.ok) {
-          throw new Error(
-            `Failed to fetch exercises: ${exercisesRes.statusText}`,
-          );
-        }
-
-        const [sessionsData, exercisesData] = await Promise.all([
-          sessionsRes.json(),
-          exercisesRes.json(),
-        ]);
-
-        setSessions(sessionsData.sessions);
-        setTotal(sessionsData.total);
-        setLimit(sessionsData.limit);
-        setFilteredSessions(sessionsData.sessions);
-        setExercises(exercisesData);
-      } catch (err) {
-        console.error("Error fetching initial data:", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to load initial data",
-        );
-      } finally {
-        setIsLoading(false);
+      if (!sessionsRes.ok) {
+        throw new Error(`Failed to fetch sessions: ${sessionsRes.statusText}`);
       }
-    };
+      if (!exercisesRes.ok) {
+        throw new Error(
+          `Failed to fetch exercises: ${exercisesRes.statusText}`,
+        );
+      }
 
-    fetchData();
+      const [sessionsData, exercisesData] = await Promise.all([
+        sessionsRes.json(),
+        exercisesRes.json(),
+      ]);
+
+      setSessions(sessionsData.sessions);
+      setTotal(sessionsData.total);
+      setLimit(sessionsData.limit);
+      setFilteredSessions(sessionsData.sessions);
+      setExercises(exercisesData);
+    } catch (err) {
+      console.error("Error fetching initial data:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to load initial data",
+      );
+    } finally {
+      setIsLoading(false);
+    }
   }, [page, limit, selectedUser]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    return () => {
+      if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    };
+  }, []);
+
+  const handleSessionDeleted = (session: WorkoutSession) => {
+    setSessions((prev) => prev.filter((s) => s.id !== session.id));
+    setFilteredSessions((prev) => prev.filter((s) => s.id !== session.id));
+    setDeletedSession(session);
+
+    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    undoTimeoutRef.current = setTimeout(() => setDeletedSession(null), 6000);
+  };
+
+  const handleUndo = async () => {
+    if (!deletedSession) return;
+    const session = deletedSession;
+    setDeletedSession(null);
+    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/sessions/${session.id}/restore`,
+        { method: "PATCH" },
+      );
+      if (!response.ok) {
+        throw new Error(`Failed to restore session: ${response.statusText}`);
+      }
+      await fetchData();
+    } catch (err) {
+      console.error("Error restoring session:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to restore session",
+      );
+    }
+  };
   useEffect(() => {
     let filtered = sessions;
 
@@ -165,9 +206,30 @@ const WorkoutHistory = () => {
         </div>
       )}
 
+      {deletedSession && (
+        <div className="flex items-center justify-between gap-4 rounded-xl border border-lime-500/30 bg-lime-500/5 px-4 py-3 text-sm text-lime-400">
+          <span>
+            Deleted <span className="font-semibold">{deletedSession.exercise}</span>{" "}
+            session.
+          </span>
+          <button
+            type="button"
+            onClick={handleUndo}
+            className="shrink-0 rounded-lg border border-lime-400/40 px-3 py-1.5 text-xs font-bold text-lime-300 transition hover:bg-lime-400/10"
+          >
+            Undo
+          </button>
+        </div>
+      )}
+
       {!isLoading && !error && (
         <>
-          <HistoryList sessions={filteredSessions} />
+          <HistoryList
+            sessions={filteredSessions}
+            exercises={exercises}
+            onSessionDeleted={handleSessionDeleted}
+            onSessionUpdated={fetchData}
+          />
           {total > 0 && (
             <div className="flex items-center justify-between border-t border-zinc-800 pt-4">
               <button
