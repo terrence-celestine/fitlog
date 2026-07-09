@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import UserPicker from "./UserPicker";
 
 const fieldClass =
   "w-full rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-500 outline-none transition focus:border-lime-400 focus:ring-2 focus:ring-lime-400/20";
@@ -6,12 +7,11 @@ const labelClass =
   "mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-400";
 
 const LogWorkout = () => {
-  const [users, setUsers] = useState<any[]>([]);
   const [exercises, setExercises] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedUser, setSelectedUser] = useState<string>("");
+  const [selectedUser, setSelectedUser] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -22,31 +22,17 @@ const LogWorkout = () => {
         setIsLoading(true);
         setError(null);
 
-        const [usersRes, exercisesRes] = await Promise.all([
-          fetch(`${import.meta.env.VITE_API_URL}/users`),
-          fetch(`${import.meta.env.VITE_API_URL}/exercises`),
-        ]);
+        const exercisesRes = await fetch(
+          `${import.meta.env.VITE_API_URL}/exercises`,
+        );
 
-        if (!usersRes.ok) {
-          throw new Error(`Failed to fetch users: ${usersRes.statusText}`);
-        }
         if (!exercisesRes.ok) {
           throw new Error(
             `Failed to fetch exercises: ${exercisesRes.statusText}`,
           );
         }
 
-        const [usersData, exercisesData] = await Promise.all([
-          usersRes.json(),
-          exercisesRes.json(),
-        ]);
-
-        setUsers(usersData);
-        setExercises(exercisesData);
-
-        if (usersData.length > 0) {
-          setSelectedUser(usersData[0].id.toString());
-        }
+        setExercises(await exercisesRes.json());
       } catch (err) {
         console.error("Error fetching initial data:", err);
         setError(
@@ -59,10 +45,6 @@ const LogWorkout = () => {
 
     fetchData();
   }, []);
-
-  const handleUserChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedUser(event.target.value);
-  };
 
   const handleWorkoutSubmit = async (
     event: React.FormEvent<HTMLFormElement>,
@@ -224,19 +206,13 @@ const LogWorkout = () => {
             <label htmlFor="user" className={labelClass}>
               Athlete
             </label>
-            <select
+            <input type="hidden" name="user" value={selectedUser ?? ""} />
+            <UserPicker
               id="user"
-              name="user"
-              value={selectedUser}
-              onChange={handleUserChange}
-              className={fieldClass}
-            >
-              {users.map((user) => (
-                <option key={user.id} value={user.id} className="bg-zinc-900">
-                  {user.name}
-                </option>
-              ))}
-            </select>
+              selectedUserId={selectedUser}
+              onSelect={setSelectedUser}
+              inputClassName={fieldClass}
+            />
           </div>
 
           {/* Exercise */}

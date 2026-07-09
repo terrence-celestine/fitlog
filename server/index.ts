@@ -271,7 +271,7 @@ app.get("/api/search", async (req, res) => {
   if (type === "exercise") {
     queryText = `SELECT * FROM exercises WHERE to_tsvector('english', name) @@ to_tsquery('english', $1) AND deleted_at IS NULL`;
   } else if (type === "user") {
-    queryText = `SELECT * FROM users WHERE to_tsvector('english', name) @@ to_tsquery('english', $1) AND deleted_at IS NULL`;
+    queryText = `SELECT * FROM users WHERE to_tsvector('english', name) @@ to_tsquery('english', $1)`;
   } else if (type === "session") {
     queryText = `
     SELECT 
