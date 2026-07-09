@@ -13,6 +13,55 @@ app.use(
 ); // allow CORS requests
 app.use(express.json()); // parse JSON
 const db = drizzle(pool, { logger: false });
+// GET /api/pool-stats — get the pool stats
+app.get("/api/pool-stats", (_, res) => {
+  res.status(200).json({
+    total: pool.totalCount,
+    idle: pool.idleCount,
+    waiting: pool.waitingCount,
+  });
+});
+// GET Aggregates stats per user
+app.get("/api/users/aggregate/:id", async (req, res) => {
+  const { id } = req.params;
+  if (!id) {
+    res.status(400).json({ error: "User ID is required" });
+    return;
+  }
+  try {
+    const aggregate_query = `
+        SELECT COUNT(workout_sessions.id) AS total_sessions,
+        SUM(sets * reps * weight) AS total_volume,
+        MAX(weight) AS heaviest_lift,
+        (
+         SELECT e.muscle_group
+         FROM workout_sessions ws
+         JOIN exercises e ON e.id = ws.exercise_id
+         WHERE ws.user_id = $1 AND ws.deleted_at IS NULL
+         GROUP BY e.muscle_group
+         ORDER BY COUNT(*) DESC
+         LIMIT 1
+         ) AS most_trained_muscle,
+        (
+          SELECT e2.name 
+          FROM workout_sessions ws2
+          JOIN exercises e2 ON e2.id = ws2.exercise_id
+          WHERE ws2.user_id = $1 AND ws2.deleted_at IS NULL
+          GROUP BY e2.name
+          ORDER BY COUNT(*) DESC
+          LIMIT 1
+        ) AS favorite_exercise
+        FROM workout_sessions
+        JOIN exercises ON exercises.id = workout_sessions.exercise_id
+        WHERE workout_sessions.user_id = $1 AND workout_sessions.deleted_at IS NULL
+        `;
+    const result = await pool.query(aggregate_query, [id]);
+    res.status(200).json(result.rows[0]);
+  } catch (error) {
+    console.error("There was an error getting the aggregates", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 // POST /users — create a user
 app.post("/api/users", async (req, res) => {
   const { name, email } = req.body;
