@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import UserPicker from "./UserPicker";
 
 type Goal = {
   id: number;
@@ -11,7 +12,6 @@ type Goal = {
   created_at: string;
 };
 
-type User = { id: number; name: string };
 type Exercise = { id: number; name: string; muscle_group: string };
 
 const fieldClass =
@@ -20,9 +20,8 @@ const labelClass =
   "mb-1.5 block text-xs font-semibold uppercase tracking-wide text-zinc-400";
 
 const Goals = () => {
-  const [users, setUsers] = useState<User[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [selectedUser, setSelectedUser] = useState<number>(1);
+  const [selectedUser, setSelectedUser] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,31 +39,17 @@ const Goals = () => {
         setIsLoading(true);
         setError(null);
 
-        const [usersRes, exercisesRes] = await Promise.all([
-          fetch(`${import.meta.env.VITE_API_URL}/users`),
-          fetch(`${import.meta.env.VITE_API_URL}/exercises`),
-        ]);
+        const exercisesRes = await fetch(
+          `${import.meta.env.VITE_API_URL}/exercises`,
+        );
 
-        if (!usersRes.ok) {
-          throw new Error(`Failed to fetch users: ${usersRes.statusText}`);
-        }
         if (!exercisesRes.ok) {
           throw new Error(
             `Failed to fetch exercises: ${exercisesRes.statusText}`,
           );
         }
 
-        const [usersData, exercisesData] = await Promise.all([
-          usersRes.json(),
-          exercisesRes.json(),
-        ]);
-
-        setUsers(usersData);
-        setExercises(exercisesData);
-
-        if (usersData.length > 0) {
-          setSelectedUser(usersData[0].id);
-        }
+        setExercises(await exercisesRes.json());
       } catch (err) {
         console.error("Error fetching initial data:", err);
         setError(
@@ -103,10 +88,6 @@ const Goals = () => {
     fetchGoals();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedUser]);
-
-  const handleUserChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedUser(Number(event.target.value));
-  };
 
   const handleGoalSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -230,19 +211,12 @@ const Goals = () => {
             <label htmlFor="user" className={labelClass}>
               Athlete
             </label>
-            <select
+            <UserPicker
               id="user"
-              name="user"
-              value={selectedUser}
-              onChange={handleUserChange}
-              className={fieldClass}
-            >
-              {users.map((user) => (
-                <option key={user.id} value={user.id} className="bg-zinc-900">
-                  {user.name}
-                </option>
-              ))}
-            </select>
+              selectedUserId={selectedUser}
+              onSelect={setSelectedUser}
+              inputClassName={fieldClass}
+            />
           </div>
 
           <div className="sm:col-span-2">

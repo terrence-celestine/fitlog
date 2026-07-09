@@ -70,25 +70,29 @@ const Search = () => {
 
     if (type === "session") {
       return (
-        <div className="rounded-lg overflow-hidden border border-gray-700">
-          <div className="grid grid-cols-5 bg-gray-800 border-b border-gray-700">
-            <span className={colClass}>Exercise</span>
-            <span className={colClass}>Sets</span>
-            <span className={colClass}>Reps</span>
-            <span className={colClass}>Weight</span>
-            <span className={colClass}>Date</span>
-          </div>
-          {results.map((r) => (
-            <div key={r.id} className={`grid grid-cols-5 ${rowClass}`}>
-              <span className={cellClass}>{r.exercise}</span>
-              <span className={cellClass}>{r.sets}</span>
-              <span className={cellClass}>{r.reps}</span>
-              <span className={cellClass}>{r.weight}lbs</span>
-              <span className={cellClass}>
-                {new Date(r.createdAt).toLocaleDateString()}
-              </span>
+        <div className="overflow-x-auto rounded-lg border border-gray-700">
+          <div className="min-w-[520px]">
+            <div className="grid grid-cols-5 bg-gray-800 border-b border-gray-700">
+              <span className={colClass}>Exercise</span>
+              <span className={colClass}>Sets</span>
+              <span className={colClass}>Reps</span>
+              <span className={colClass}>Weight</span>
+              <span className={colClass}>Date</span>
             </div>
-          ))}
+            {results.map((r) => (
+              <div key={r.id} className={`grid grid-cols-5 ${rowClass}`}>
+                <span className={`${cellClass} whitespace-nowrap`}>
+                  {r.exercise}
+                </span>
+                <span className={cellClass}>{r.sets}</span>
+                <span className={cellClass}>{r.reps}</span>
+                <span className={cellClass}>{r.weight}lbs</span>
+                <span className={`${cellClass} whitespace-nowrap`}>
+                  {new Date(r.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
       );
     }
@@ -114,7 +118,7 @@ const Search = () => {
     <div className="max-w-4xl mx-auto p-6 space-y-6">
       <h1 className="text-2xl font-bold text-white">Search</h1>
 
-      <div className="flex gap-3">
+      <div className="flex flex-col gap-3 sm:flex-row">
         <input
           type="text"
           placeholder="Search..."
@@ -123,25 +127,27 @@ const Search = () => {
           onKeyDown={(e) => e.key === "Enter" && handleSearch()}
           className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500"
         />
-        <select
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-          className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
-        >
-          {types.map((t) => (
-            <option key={t} value={t}>
-              {t.charAt(0).toUpperCase() + t.slice(1)}
-            </option>
-          ))}
-        </select>
-        <button
-          onClick={handleSearch}
-          className={[
-            "bg-lime-400 text-zinc-950 hover:bg-lime-500 px-6 py-2 rounded-lg font-medium transition-colors cursor-pointer",
-          ].join(" ")}
-        >
-          Search
-        </button>
+        <div className="flex gap-3">
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500 sm:flex-none"
+          >
+            {types.map((t) => (
+              <option key={t} value={t}>
+                {t.charAt(0).toUpperCase() + t.slice(1)}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={handleSearch}
+            className={[
+              "bg-lime-400 text-zinc-950 hover:bg-lime-500 px-6 py-2 rounded-lg font-medium transition-colors cursor-pointer",
+            ].join(" ")}
+          >
+            Search
+          </button>
+        </div>
       </div>
 
       {hasSearched && renderResults()}

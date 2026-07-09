@@ -158,16 +158,21 @@ app.get("/api/sessions", async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
-// GET /leaderboard — all users ranked by total sessions this week
+// GET /leaderboard — top 20 users ranked by total sessions this week
 app.get("/api/leaderboard", async (req, res) => {
   try {
     const all_users = await db
-      .select({ name: users.name, total_sessions: count(workout_sessions.id) })
+      .select({
+        id: users.id,
+        name: users.name,
+        total_sessions: count(workout_sessions.id),
+      })
       .from(users)
       .leftJoin(workout_sessions, eq(users.id, workout_sessions.user_id))
       .where(isNull(workout_sessions.deleted_at))
       .groupBy(users.id)
-      .orderBy(desc(count(workout_sessions.id)));
+      .orderBy(desc(count(workout_sessions.id)))
+      .limit(20);
     res.status(200).json(all_users);
   } catch (error) {
     console.error("There was an error getting the leaderboard", error);

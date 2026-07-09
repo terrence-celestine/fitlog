@@ -8,6 +8,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import UserPicker from "./UserPicker";
 
 type ProgressPoint = {
   id: number;
@@ -21,7 +22,6 @@ type ProgressPoint = {
   muscle_group: string;
 };
 
-type User = { id: number; name: string };
 type Exercise = { id: number; name: string; muscle_group: string };
 
 const fieldClass =
@@ -34,9 +34,8 @@ const formatDate = (value: string) =>
   });
 
 const ProgressCharts = () => {
-  const [users, setUsers] = useState<User[]>([]);
   const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [selectedUser, setSelectedUser] = useState<number>(1);
+  const [selectedUser, setSelectedUser] = useState<number | null>(null);
   const [selectedExercise, setSelectedExercise] = useState<number>(1);
   const [metric, setMetric] = useState<"weight" | "volume">("weight");
 
@@ -46,19 +45,11 @@ const ProgressCharts = () => {
 
   useEffect(() => {
     const fetchOptions = async () => {
-      const [usersRes, exercisesRes] = await Promise.all([
-        fetch(`${import.meta.env.VITE_API_URL}/users`),
-        fetch(`${import.meta.env.VITE_API_URL}/exercises`),
-      ]);
-      const [usersData, exercisesData] = await Promise.all([
-        usersRes.json(),
-        exercisesRes.json(),
-      ]);
-      setUsers(usersData);
+      const exercisesRes = await fetch(
+        `${import.meta.env.VITE_API_URL}/exercises`,
+      );
+      const exercisesData = await exercisesRes.json();
       setExercises(exercisesData);
-      if (usersData.length > 0) {
-        setSelectedUser(usersData[0].id);
-      }
       if (exercisesData.length > 0) {
         setSelectedExercise(exercisesData[0].id);
       }
@@ -92,44 +83,11 @@ const ProgressCharts = () => {
     fetchProgress();
   }, [selectedUser, selectedExercise]);
 
-  if (isLoading) {
-    return (
-      <div className="space-y-8">
-        <div>
-          <div className="h-8 w-40 animate-pulse rounded-lg bg-zinc-800" />
-          <div className="mt-2 h-4 w-64 animate-pulse rounded bg-zinc-800/70" />
-        </div>
-        <div className="h-80 animate-pulse rounded-2xl bg-zinc-900/40" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div
-        role="alert"
-        className="mx-auto max-w-md rounded-2xl border border-red-500/30 bg-red-500/5 p-8 text-center"
-      >
-        <span className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full bg-red-500/10 text-2xl">
-          ⚠️
-        </span>
-        <h2 className="text-lg font-bold text-zinc-100">
-          Couldn&apos;t load progress
-        </h2>
-        <p className="mt-1 text-sm text-zinc-400">{error}</p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="mt-6 rounded-xl bg-lime-400 px-5 py-2.5 text-sm font-bold text-zinc-950 transition hover:bg-lime-300 focus:outline-none focus:ring-2 focus:ring-lime-400/40"
-        >
-          Try again
-        </button>
-      </div>
-    );
-  }
-
   const metricLabel = metric === "weight" ? "Weight (lbs)" : "Volume (lbs)";
 
+  // The header + filters (including UserPicker) always render, regardless of
+  // loading/error state - see History.tsx for why UserPicker can't be gated
+  // behind isLoading (it owns picking the initial selectedUser).
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -143,18 +101,7 @@ const ProgressCharts = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <select
-            aria-label="Filter by user"
-            className={fieldClass}
-            value={selectedUser}
-            onChange={(event) => setSelectedUser(Number(event.target.value))}
-          >
-            {users.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.name}
-              </option>
-            ))}
-          </select>
+          <UserPicker selectedUserId={selectedUser} onSelect={setSelectedUser} />
           <select
             aria-label="Filter by exercise"
             className={fieldClass}
@@ -198,7 +145,33 @@ const ProgressCharts = () => {
         </div>
       </div>
 
-      {progress.length === 0 ? (
+      {isLoading && (
+        <div className="h-80 animate-pulse rounded-2xl bg-zinc-900/40" />
+      )}
+
+      {!isLoading && error && (
+        <div
+          role="alert"
+          className="mx-auto max-w-md rounded-2xl border border-red-500/30 bg-red-500/5 p-8 text-center"
+        >
+          <span className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full bg-red-500/10 text-2xl">
+            ⚠️
+          </span>
+          <h2 className="text-lg font-bold text-zinc-100">
+            Couldn&apos;t load progress
+          </h2>
+          <p className="mt-1 text-sm text-zinc-400">{error}</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-6 rounded-xl bg-lime-400 px-5 py-2.5 text-sm font-bold text-zinc-950 transition hover:bg-lime-300 focus:outline-none focus:ring-2 focus:ring-lime-400/40"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {!isLoading && !error && progress.length === 0 && (
         <div className="grid place-items-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/20 px-6 py-16 text-center">
           <span className="mb-3 grid h-12 w-12 place-items-center rounded-full bg-zinc-800 text-2xl">
             📈
@@ -211,7 +184,9 @@ const ProgressCharts = () => {
             time.
           </p>
         </div>
-      ) : (
+      )}
+
+      {!isLoading && !error && progress.length > 0 && (
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 shadow-xl shadow-black/20 sm:p-6">
           <ResponsiveContainer width="100%" height={320}>
             <LineChart data={progress}>

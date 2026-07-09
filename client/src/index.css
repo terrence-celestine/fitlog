@@ -7,6 +7,14 @@ body,
   min-height: 100%;
 }
 
+/* Safety net: a stray unwrapped element (e.g. a nav that hasn't been given a
+   mobile layout) should scroll within itself, not stretch the whole page's
+   layout viewport wider than the device. */
+html,
+body {
+  overflow-x: hidden;
+}
+
 body {
   @apply bg-zinc-950 text-zinc-100 antialiased;
   font-family:

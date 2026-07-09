@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import UserPicker from "./UserPicker";
 
 type PersonalRecord = {
   user_id: number;
@@ -11,32 +12,19 @@ type PersonalRecord = {
   created_at: string;
 };
 
-type User = { id: number; name: string };
-
 const fieldClass =
   "rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-100 outline-none transition focus:border-lime-400 focus:ring-2 focus:ring-lime-400/20";
 
 const PersonalRecords = () => {
   const [personalRecords, setPersonalRecords] = useState<PersonalRecord[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedUser, setSelectedUser] = useState<number>(1);
+  const [selectedUser, setSelectedUser] = useState<number | null>(null);
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState<string>("");
 
   useEffect(() => {
-    const fetchUsers = async () => {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/users`);
-      const data = await response.json();
-      setUsers(data);
-      if (data.length > 0) {
-        setSelectedUser(data[0].id);
-      }
-    };
-    fetchUsers();
-  }, []);
+    if (selectedUser === null) return;
 
-  useEffect(() => {
     const fetchPersonalRecords = async () => {
       setIsLoading(true);
       setError(null);
@@ -71,49 +59,9 @@ const PersonalRecords = () => {
       )
     : personalRecords;
 
-  if (isLoading) {
-    return (
-      <div className="space-y-8">
-        <div>
-          <div className="h-8 w-52 animate-pulse rounded-lg bg-zinc-800" />
-          <div className="mt-2 h-4 w-64 animate-pulse rounded bg-zinc-800/70" />
-        </div>
-        <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-12 animate-pulse rounded-xl bg-zinc-900/40"
-            />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div
-        role="alert"
-        className="mx-auto max-w-md rounded-2xl border border-red-500/30 bg-red-500/5 p-8 text-center"
-      >
-        <span className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full bg-red-500/10 text-2xl">
-          ⚠️
-        </span>
-        <h2 className="text-lg font-bold text-zinc-100">
-          Couldn&apos;t load personal records
-        </h2>
-        <p className="mt-1 text-sm text-zinc-400">{error}</p>
-        <button
-          type="button"
-          onClick={() => window.location.reload()}
-          className="mt-6 rounded-xl bg-lime-400 px-5 py-2.5 text-sm font-bold text-zinc-950 transition hover:bg-lime-300 focus:outline-none focus:ring-2 focus:ring-lime-400/40"
-        >
-          Try again
-        </button>
-      </div>
-    );
-  }
-
+  // The header + filters (including UserPicker) always render, regardless of
+  // loading/error state - see History.tsx for why UserPicker can't be gated
+  // behind isLoading (it owns picking the initial selectedUser).
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -127,18 +75,7 @@ const PersonalRecords = () => {
         </div>
 
         <div className="flex gap-2">
-          <select
-            aria-label="Filter by user"
-            className={fieldClass}
-            value={selectedUser}
-            onChange={(event) => setSelectedUser(Number(event.target.value))}
-          >
-            {users.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.name}
-              </option>
-            ))}
-          </select>
+          <UserPicker selectedUserId={selectedUser} onSelect={setSelectedUser} />
           <select
             aria-label="Filter by muscle group"
             className={fieldClass}
@@ -155,7 +92,40 @@ const PersonalRecords = () => {
         </div>
       </div>
 
-      {filteredRecords.length === 0 ? (
+      {isLoading && (
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-16 animate-pulse rounded-2xl bg-zinc-900/40"
+            />
+          ))}
+        </div>
+      )}
+
+      {!isLoading && error && (
+        <div
+          role="alert"
+          className="mx-auto max-w-md rounded-2xl border border-red-500/30 bg-red-500/5 p-8 text-center"
+        >
+          <span className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full bg-red-500/10 text-2xl">
+            ⚠️
+          </span>
+          <h2 className="text-lg font-bold text-zinc-100">
+            Couldn&apos;t load personal records
+          </h2>
+          <p className="mt-1 text-sm text-zinc-400">{error}</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="mt-6 rounded-xl bg-lime-400 px-5 py-2.5 text-sm font-bold text-zinc-950 transition hover:bg-lime-300 focus:outline-none focus:ring-2 focus:ring-lime-400/40"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {!isLoading && !error && filteredRecords.length === 0 && (
         <div className="grid place-items-center rounded-2xl border border-dashed border-zinc-800 bg-zinc-900/20 px-6 py-16 text-center">
           <span className="mb-3 grid h-12 w-12 place-items-center rounded-full bg-zinc-800 text-2xl">
             🏆
@@ -165,38 +135,38 @@ const PersonalRecords = () => {
             Log a workout to start setting records.
           </p>
         </div>
-      ) : (
-        <div className="overflow-hidden rounded-2xl border border-zinc-800">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-zinc-800 bg-zinc-900/60 text-xs font-medium uppercase tracking-wide text-zinc-500">
-                <th className="px-4 py-3 sm:px-5">Exercise</th>
-                <th className="px-4 py-3 sm:px-5">Muscle Group</th>
-                <th className="px-4 py-3 text-right sm:px-5">
-                  Personal Record
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-800">
-              {filteredRecords.map((record) => (
-                <tr
-                  key={record.exercise_id}
-                  className="bg-zinc-900/20 transition hover:bg-zinc-900/40"
-                >
-                  <td className="px-4 py-3 font-semibold text-zinc-100 sm:px-5">
+      )}
+
+      {!isLoading && !error && filteredRecords.length > 0 && (
+        <ul className="space-y-3">
+          {filteredRecords.map((record) => (
+            <li
+              key={record.exercise_id}
+              className="flex items-center justify-between gap-4 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4 transition hover:border-zinc-700 sm:p-5"
+            >
+              <div className="flex min-w-0 items-center gap-4">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-lime-400/10 text-sm font-bold text-lime-400">
+                  {record.muscle_group.slice(0, 2).toUpperCase()}
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-zinc-100">
                     {record.exercise}
-                  </td>
-                  <td className="px-4 py-3 text-zinc-400 sm:px-5">
-                    {record.muscle_group}
-                  </td>
-                  <td className="px-4 py-3 text-right font-bold tabular-nums text-lime-400 sm:px-5">
-                    {record.personal_record} lbs
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                  </p>
+                  <p className="text-xs text-zinc-400">{record.muscle_group}</p>
+                </div>
+              </div>
+
+              <div className="text-right">
+                <p className="text-base font-bold tabular-nums text-lime-400">
+                  {record.personal_record}
+                </p>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
+                  lbs
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

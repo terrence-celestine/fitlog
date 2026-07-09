@@ -1,21 +1,6 @@
-// TODO: wire up state + data fetching
-//   - fetch leaderboard -> GET /leaderboard
-
 import { useEffect, useState } from "react";
 
-type Rank = { name: string; total_sessions: number };
-
-// TODO: replace with data from GET /leaderboard
-const rows: Rank[] = [
-  { name: "Terrence", total_sessions: 12 },
-  { name: "Jordan", total_sessions: 9 },
-  { name: "Sam", total_sessions: 7 },
-  { name: "Alex", total_sessions: 4 },
-  { name: "Casey", total_sessions: 2 },
-];
-
-// TODO: derive from data (max total_sessions) for the progress bars
-const maxSessions = Math.max(1, ...rows.map((r) => r.total_sessions));
+type Rank = { id: number; name: string; total_sessions: number };
 
 const medal = ["🥇", "🥈", "🥉"];
 
@@ -98,6 +83,9 @@ const Leaderboard = () => {
       </div>
     );
   }
+
+  const maxSessions = Math.max(1, ...leaderboard.map((r) => r.total_sessions));
+
   return (
     <div className="space-y-8">
       {/* Heading */}
@@ -115,7 +103,7 @@ const Leaderboard = () => {
           const isTop = i === 0;
           return (
             <li
-              key={row.name}
+              key={row.id}
               className={[
                 "flex items-center gap-4 rounded-2xl border p-4 transition sm:p-5",
                 isTop
