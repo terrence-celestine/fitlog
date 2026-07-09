@@ -1,5 +1,5 @@
 import cors from "cors";
-import { count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, isNull } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import express from "express";
 import pool from "./db/client";
@@ -12,7 +12,7 @@ app.use(
   }),
 ); // allow CORS requests
 app.use(express.json()); // parse JSON
-const db = drizzle(pool, { logger: true });
+const db = drizzle(pool, { logger: false });
 // POST /users — create a user
 app.post("/api/users", async (req, res) => {
   const { name, email } = req.body;
@@ -57,6 +57,33 @@ app.post("/api/sessions", async (req, res) => {
 // Examples:
 //   - GET /sessions?user_id=1
 //   - GET /sessions?user_id=1&exercise=Bench+Press
+app.delete("/api/sessions/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    await db
+      .update(workout_sessions)
+      .set({ deleted_at: new Date() })
+      .where(eq(workout_sessions.id, Number(id)));
+    res.status(200).json({ message: "Session deleted successfully" });
+  } catch (error) {
+    console.error("There was an error trying to delete session", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+// PATCH /sessions/:id — update a session so it comes back
+app.patch("/api/sessions/:id/restore", async (req, res) => {
+  const { id } = req.params;
+  try {
+    await db
+      .update(workout_sessions)
+      .set({ deleted_at: null })
+      .where(eq(workout_sessions.id, Number(id)));
+    res.status(200).json({ message: "Session updated successfully" });
+  } catch (error) {
+    console.error("There was an error trying to update session", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 app.get("/api/sessions", async (req, res) => {
   const { user_id, exercise, limit, page } = req.query;
   try {
@@ -76,6 +103,9 @@ app.get("/api/sessions", async (req, res) => {
       `;
     const queryParams: any[] = [];
     const conditions: string[] = [];
+
+    conditions.push(`e.deleted_at IS NULL`);
+    conditions.push(`ws.deleted_at IS NULL`);
 
     if (user_id) {
       queryParams.push(user_id);
@@ -112,7 +142,7 @@ app.get("/api/sessions", async (req, res) => {
     const countResult = await pool.query(
       `SELECT COUNT(*) FROM workout_sessions ws
        JOIN exercises e ON e.id = ws.exercise_id
-       WHERE ws.user_id = $1`,
+       WHERE ws.deleted_at IS NULL AND e.deleted_at IS NULL AND ws.user_id = $1`,
       [user_id],
     );
 
@@ -135,6 +165,7 @@ app.get("/api/leaderboard", async (req, res) => {
       .select({ name: users.name, total_sessions: count(workout_sessions.id) })
       .from(users)
       .leftJoin(workout_sessions, eq(users.id, workout_sessions.user_id))
+      .where(isNull(workout_sessions.deleted_at))
       .groupBy(users.id)
       .orderBy(desc(count(workout_sessions.id)));
     res.status(200).json(all_users);
@@ -150,7 +181,12 @@ app.get("/api/users/last-workouts", async (req, res) => {
       const user_last_workout = await db
         .select()
         .from(workout_sessions)
-        .where(eq(workout_sessions.user_id, user.id))
+        .where(
+          and(
+            eq(workout_sessions.user_id, user.id),
+            isNull(workout_sessions.deleted_at),
+          ),
+        )
         .orderBy(desc(workout_sessions.created_at))
         .limit(1);
 
@@ -168,7 +204,7 @@ app.get("/api/users/last-workouts", async (req, res) => {
 app.get("/api/users/last-workouts-fixed", async (req, res) => {
   try {
     const all_users = await pool.query(
-      "SELECT DISTINCT ON (ws.user_id) u.id, u.name, u.email, ws.* FROM users u LEFT JOIN workout_sessions ws ON ws.user_id = u.id ORDER BY ws.user_id, ws.created_at DESC",
+      "SELECT DISTINCT ON (ws.user_id) u.id, u.name, u.email, ws.* FROM users u LEFT JOIN workout_sessions ws ON ws.user_id = u.id AND ws.deleted_at IS NULL ORDER BY ws.user_id, ws.created_at DESC",
     );
     res.status(200).json(all_users.rows);
   } catch (error) {
@@ -183,7 +219,12 @@ app.get("/api/users/:id/last-workout", async (req, res) => {
     const allWorkout = await db
       .select()
       .from(workout_sessions)
-      .where(eq(workout_sessions.user_id, Number(id)))
+      .where(
+        and(
+          eq(workout_sessions.user_id, Number(id)),
+          isNull(workout_sessions.deleted_at),
+        ),
+      )
       .orderBy(desc(workout_sessions.created_at))
       .limit(1);
     res.status(200).json(allWorkout[0]);
@@ -206,9 +247,9 @@ app.get("/api/search", async (req, res) => {
   const { q, type } = req.query;
   let queryText;
   if (type === "exercise") {
-    queryText = `SELECT * FROM exercises WHERE to_tsvector('english', name) @@ to_tsquery('english', $1)`;
+    queryText = `SELECT * FROM exercises WHERE to_tsvector('english', name) @@ to_tsquery('english', $1) AND deleted_at IS NULL`;
   } else if (type === "user") {
-    queryText = `SELECT * FROM users WHERE to_tsvector('english', name) @@ to_tsquery('english', $1)`;
+    queryText = `SELECT * FROM users WHERE to_tsvector('english', name) @@ to_tsquery('english', $1) AND deleted_at IS NULL`;
   } else if (type === "session") {
     queryText = `
     SELECT 
@@ -223,7 +264,7 @@ app.get("/api/search", async (req, res) => {
       ws.created_at AS "createdAt"
     FROM workout_sessions ws
     JOIN exercises e ON e.id = ws.exercise_id
-    WHERE to_tsvector('english', e.name) @@ to_tsquery('english', $1)
+    WHERE to_tsvector('english', e.name) @@ to_tsquery('english', $1) AND ws.deleted_at IS NULL AND e.deleted_at IS NULL
   `;
   } else {
     res.status(400).json({ error: "Invalid type" });
@@ -239,7 +280,10 @@ app.get("/api/search", async (req, res) => {
 });
 app.get("/api/exercises", async (_, res) => {
   try {
-    const all_exercises = await db.select().from(exercises);
+    const all_exercises = await db
+      .select()
+      .from(exercises)
+      .where(isNull(exercises.deleted_at));
     res.status(200).json(all_exercises);
   } catch (error) {
     console.error("There was an error getting the exercises", error);
@@ -266,6 +310,7 @@ app.get("/api/personal-records", async (req, res) => {
       FROM workout_sessions ws
       JOIN exercises e ON e.id = ws.exercise_id
       WHERE ws.user_id = $1
+      AND ws.deleted_at IS NULL
       ORDER BY ws.exercise_id, ws.weight DESC`,
       [Number(user_id)],
     );
@@ -300,7 +345,7 @@ app.get("/api/progress", async (req, res) => {
          e.muscle_group
        FROM workout_sessions ws
        JOIN exercises e ON e.id = ws.exercise_id
-       WHERE ws.user_id = $1 AND ws.exercise_id = $2
+       WHERE ws.user_id = $1 AND ws.exercise_id = $2 AND ws.deleted_at IS NULL
        ORDER BY ws.created_at ASC`,
       [Number(user_id), Number(exercise_id)],
     );
@@ -365,6 +410,7 @@ app.get("/api/goals", async (req, res) => {
            exercise_id, weight AS current_best_weight
          FROM workout_sessions
          WHERE user_id = $1
+         AND deleted_at IS NULL
          ORDER BY exercise_id, weight DESC
        ) best ON best.exercise_id = g.exercise_id
        WHERE g.user_id = $1

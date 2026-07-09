@@ -19,6 +19,7 @@ export const exercises = pgTable("exercises", {
   name: varchar("name", { length: 255 }).notNull().unique(),
   muscle_group: varchar("muscle_group", { length: 255 }).notNull(),
   created_at: timestamp("created_at").defaultNow().notNull(),
+  deleted_at: timestamp("deleted_at"),
 });
 
 export const workout_sessions = pgTable("workout_sessions", {
@@ -26,13 +27,14 @@ export const workout_sessions = pgTable("workout_sessions", {
   user_id: integer("user_id")
     .notNull()
     .references(() => users.id),
-  exercise_id: integer("exercide_id")
+  exercise_id: integer("exercise_id")
     .notNull()
     .references(() => exercises.id),
   sets: integer("sets").notNull(),
   reps: integer("reps").notNull(),
   weight: integer("weight").notNull(),
   created_at: timestamp("created_at").defaultNow().notNull(),
+  deleted_at: timestamp("deleted_at"),
 });
 
 export const goals = pgTable(
@@ -47,6 +49,7 @@ export const goals = pgTable(
       .references(() => exercises.id),
     target_weight: integer("target_weight").notNull(),
     created_at: timestamp("created_at").defaultNow().notNull(),
+    deleted_at: timestamp("deleted_at"),
   },
   (table) => [unique().on(table.user_id, table.exercise_id)],
 );
