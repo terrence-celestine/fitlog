@@ -1,6 +1,6 @@
 # FitLog
 
-A personal workout logging app built to learn raw SQL, indexes, and query optimization from the ground up. No ORM until the comparison section — every query is written by hand with node-postgres.
+A personal workout logging app built to learn raw SQL, indexes, and query optimization from the ground up. Drizzle ORM handles straightforward CRUD (users, exercises, sessions, leaderboard); raw SQL is kept deliberately for the queries where it earns its keep — window functions, `DISTINCT ON`, full-text search, and the N+1 comparison.
 
 **Live:** [fitlog.theteecee.dev](https://fitlog.theteecee.dev)
 
@@ -13,7 +13,7 @@ A personal workout logging app built to learn raw SQL, indexes, and query optimi
 | Frontend | Vite + React + TypeScript + Tailwind CSS |
 | Backend  | Node.js + Express 5                      |
 | Database | Neon Postgres (node-postgres / pg)       |
-| ORM      | Drizzle (comparison only — see below)    |
+| ORM      | Drizzle (CRUD) + raw SQL (complex queries) |
 | Deploy   | Vercel (frontend) + Railway (backend)    |
 
 ---
@@ -22,11 +22,15 @@ A personal workout logging app built to learn raw SQL, indexes, and query optimi
 
 - Log workout sessions (exercise, sets, reps, weight)
 - View session history filtered by user or exercise
+- Edit or soft delete/restore workout sessions from history
 - Paginated session history with total count
 - Leaderboard ranked by total sessions
 - Personal records per exercise per user
+- Per-user aggregate stats — total volume, heaviest lift, most-trained muscle group, favorite exercise
+- Goal tracking per exercise with progress toward target weight
+- Progress charts over time (Recharts)
+- Typeahead user search, reused as a shared picker across pages
 - Full-text search across exercises, users, and sessions
-- Soft delete and restore for workout sessions
 - N+1 demonstration and fix endpoints
 - Raw SQL vs Drizzle ORM comparison
 
@@ -37,7 +41,7 @@ A personal workout logging app built to learn raw SQL, indexes, and query optimi
 ```
 users
   id          SERIAL PRIMARY KEY
-  name        VARCHAR(255) NOT NULL UNIQUE
+  name        VARCHAR(255) NOT NULL
   email       VARCHAR(255) NOT NULL UNIQUE
   created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 
@@ -82,8 +86,11 @@ goals
 | Method | Endpoint                                       | Description                                                    |
 | ------ | ---------------------------------------------- | -------------------------------------------------------------- |
 | POST   | `/api/users`                                   | Create a user                                                  |
+| GET    | `/api/users?q=ben&limit=8`                     | Typeahead user search (limit capped at 20, default 8)          |
+| GET    | `/api/users/aggregate/:id`                     | Per-user aggregate stats — total volume, heaviest lift, most-trained muscle group, favorite exercise |
 | POST   | `/api/exercises`                               | Create an exercise                                             |
 | POST   | `/api/sessions`                                | Log a workout session                                          |
+| PATCH  | `/api/sessions/:id`                            | Edit a session's exercise, sets, reps, weight, or date          |
 | GET    | `/api/sessions?user_id=1`                      | Get all sessions for a user                                    |
 | GET    | `/api/sessions?user_id=1&exercise=Bench+Press` | Filter by user and exercise                                    |
 | GET    | `/api/sessions?user_id=1&page=1&limit=10`      | Paginated sessions with total count                            |
@@ -98,6 +105,7 @@ goals
 | GET    | `/api/users/last-workouts`                     | All users + last workout (N+1 version)                         |
 | GET    | `/api/users/last-workouts-fixed`               | All users + last workout (single JOIN)                         |
 | GET    | `/api/users/:id/last-workout`                  | Single user's last workout                                     |
+| GET    | `/api/pool-stats`                              | pg connection pool diagnostics (total/idle/waiting)             |
 
 ---
 
@@ -265,8 +273,7 @@ cd server
 npm install
 
 # Set up environment variables
-cp .env.example .env
-# Add your DATABASE_URL from Neon, FRONTEND_URL, and PORT
+# Create a .env file in server/ with DATABASE_URL (from Neon), FRONTEND_URL, and PORT — see below
 
 # Run the server
 npm run dev
@@ -288,7 +295,7 @@ PORT=3000
 **Environment variables (client):**
 
 ```
-VITE_API_URL=http://localhost:3000
+VITE_API_URL=http://localhost:3000/api
 ```
 
 ---
