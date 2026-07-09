@@ -22,9 +22,12 @@ A personal workout logging app built to learn raw SQL, indexes, and query optimi
 
 - Log workout sessions (exercise, sets, reps, weight)
 - View session history filtered by user or exercise
-- Leaderboard ranked by total sessions this week
-- N+1 demonstration endpoint with query count logging
-- N+1 fixed endpoint using a single JOIN query
+- Paginated session history with total count
+- Leaderboard ranked by total sessions
+- Personal records per exercise per user
+- Full-text search across exercises, users, and sessions
+- Soft delete and restore for workout sessions
+- N+1 demonstration and fix endpoints
 - Raw SQL vs Drizzle ORM comparison
 
 ---
@@ -34,15 +37,16 @@ A personal workout logging app built to learn raw SQL, indexes, and query optimi
 ```
 users
   id          SERIAL PRIMARY KEY
-  name        VARCHAR(255) NOT NULL
+  name        VARCHAR(255) NOT NULL UNIQUE
   email       VARCHAR(255) NOT NULL UNIQUE
   created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 
 exercises
   id            SERIAL PRIMARY KEY
-  name          VARCHAR(255) NOT NULL
+  name          VARCHAR(255) NOT NULL UNIQUE
   muscle_group  VARCHAR(255) NOT NULL
   created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  deleted_at    TIMESTAMP
 
 workout_sessions
   id           SERIAL PRIMARY KEY
@@ -52,6 +56,16 @@ workout_sessions
   reps         INT NOT NULL
   weight       INT NOT NULL
   created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  deleted_at   TIMESTAMP
+
+goals
+  id             SERIAL PRIMARY KEY
+  user_id        INT NOT NULL REFERENCES users(id)
+  exercise_id    INT NOT NULL REFERENCES exercises(id)
+  target_weight  INT NOT NULL
+  created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  deleted_at     TIMESTAMP
+  UNIQUE(user_id, exercise_id)
 ```
 
 **Design decisions:**
@@ -59,22 +73,31 @@ workout_sessions
 - `workout_sessions` uses foreign keys to `users` and `exercises` — enforces referential integrity at the DB level
 - `exercise_id` instead of storing exercise name as a string — avoids data duplication and enables GROUP BY across exercises
 - `created_at` on sessions enables time-based leaderboard filtering without a separate date table
+- `deleted_at` on sessions and exercises enables soft deletes — rows are never permanently removed
 
 ---
 
 ## API Endpoints
 
-| Method | Endpoint                                       | Description                                  |
-| ------ | ---------------------------------------------- | -------------------------------------------- |
-| POST   | `/api/users`                                   | Create a user                                |
-| POST   | `/api/exercises`                               | Create an exercise                           |
-| POST   | `/api/sessions`                                | Log a workout session                        |
-| GET    | `/api/sessions?user_id=1`                      | Get all sessions for a user                  |
-| GET    | `/api/sessions?user_id=1&exercise=Bench+Press` | Filter by user and exercise                  |
-| GET    | `/api/leaderboard`                             | All users ranked by total sessions this week |
-| GET    | `/api/users/last-workouts`                     | All users + last workout (N+1 version)       |
-| GET    | `/api/users/last-workouts-fixed`               | All users + last workout (single JOIN)       |
-| GET    | `/api/users/:id/last-workout`                  | Single user's last workout                   |
+| Method | Endpoint                                       | Description                                                    |
+| ------ | ---------------------------------------------- | -------------------------------------------------------------- |
+| POST   | `/api/users`                                   | Create a user                                                  |
+| POST   | `/api/exercises`                               | Create an exercise                                             |
+| POST   | `/api/sessions`                                | Log a workout session                                          |
+| GET    | `/api/sessions?user_id=1`                      | Get all sessions for a user                                    |
+| GET    | `/api/sessions?user_id=1&exercise=Bench+Press` | Filter by user and exercise                                    |
+| GET    | `/api/sessions?user_id=1&page=1&limit=10`      | Paginated sessions with total count                            |
+| DELETE | `/api/sessions/:id`                            | Soft delete a session — sets `deleted_at` to current timestamp |
+| PATCH  | `/api/sessions/:id/restore`                    | Restore a soft deleted session — sets `deleted_at` to NULL     |
+| GET    | `/api/leaderboard`                             | All users ranked by total sessions                             |
+| GET    | `/api/personal-records?user_id=1`              | Heaviest lift per exercise per user                            |
+| GET    | `/api/search?q=bench&type=exercise`            | Full-text search (type: exercise, user, session)               |
+| GET    | `/api/progress?user_id=1&exercise_id=1`        | Weight progress over time with running max                     |
+| GET    | `/api/goals?user_id=1`                         | User goals with current best weight                            |
+| POST   | `/api/goals`                                   | Set or update a goal                                           |
+| GET    | `/api/users/last-workouts`                     | All users + last workout (N+1 version)                         |
+| GET    | `/api/users/last-workouts-fixed`               | All users + last workout (single JOIN)                         |
+| GET    | `/api/users/:id/last-workout`                  | Single user's last workout                                     |
 
 ---
 
@@ -99,39 +122,27 @@ See: `GET /api/users/last-workouts` vs `GET /api/users/last-workouts-fixed`
 
 ---
 
-### EXPLAIN ANALYZE
+### EXPLAIN ANALYZE & Indexes
 
-Running `EXPLAIN ANALYZE` on the leaderboard query before and after adding an index on `workout_sessions.user_id`:
+**Indexes created:**
 
-**Before index:**
-
-```
-Seq Scan on workout_sessions
-  cost=0.006..0.008ms rows=1 width=48
-  actual time=0.043..18.721 ms
+```sql
+CREATE INDEX idx_sessions_user_id ON workout_sessions(user_id);
+CREATE INDEX idx_sessions_user_created ON workout_sessions(user_id, created_at);
 ```
 
-**After index:**
+**What we found:**
 
-```
-Index Scan using idx_sessions_user_id on workout_sessions
-  cost=0.00..8.28 rows=1 width=48
-  actual time=0.021..0.089 ms
-```
-
-Postgres was scanning every row to find sessions for a given user. The index lets it jump directly to the matching rows.
-
-**Composite index** added on `(user_id, created_at)` for queries that filter by user and sort by date — equality column first, range column second.
-
-What we found:
 With only 18 rows, Postgres ignored both indexes and chose a seq scan — correctly. A seq scan on a small table is faster than the overhead of an index lookup.
-Forced the index with SET enable_seqscan = off to verify behavior:
 
-Seq scan execution time: 0.134ms
-Index scan execution time: 0.091ms
+Forced the index with `SET enable_seqscan = off` to verify behavior:
 
-At scale the difference compounds. With millions of rows, Postgres would choose the index automatically.
-Composite index column order matters — user_id first (equality filter), created_at second (sort/range). Flipping the order makes the index far less useful for queries that filter by user and order by date.
+- Seq scan execution time: **0.134ms**
+- Index scan execution time: **0.091ms**
+
+At scale the difference compounds. With millions of rows Postgres would choose the index automatically.
+
+**Composite index column order matters** — `user_id` first (equality filter), `created_at` second (sort/range). Flipping the order makes the index far less useful for queries that filter by user and order by date.
 
 ---
 
@@ -155,33 +166,90 @@ ORDER BY total_sessions DESC
 select "users"."name", count("workout_sessions"."id") as "total_sessions"
 from "users"
 left join "workout_sessions" on "workout_sessions"."user_id" = "users"."id"
-group by "users"."name"
-order by "total_sessions" desc
+group by "users"."id"
+order by count("workout_sessions"."id") desc
 ```
 
-Functionally identical — Drizzle wraps identifiers in quotes and aliases columns consistently. The ORM is trustworthy for standard queries but raw SQL is still preferable when you need `DISTINCT ON`, window functions, or complex CTEs that Drizzle can't express cleanly.
+Key differences:
+
+- Drizzle quotes every identifier
+- Drizzle selects specific columns, never `SELECT *`
+- `GROUP BY` uses `users.id` instead of `users.name`
+
+**When to go around the ORM:**
+
+- `DISTINCT ON` queries — Drizzle cannot express this
+- Window functions — `MAX() OVER (PARTITION BY ...)`
+- Complex CTEs
+- Any query requiring Postgres-specific syntax
 
 ---
 
-Three queries compared:
+### Full-Text Search
 
-GET /users — SELECT \* FROM users vs Drizzle selecting specific columns with quoted identifiers
-GET /exercises — same pattern
-GET /leaderboard — biggest difference: Drizzle groups by users.id instead of users.name, and quotes every identifier
+Uses Postgres `tsvector` and `tsquery` for language-aware search.
 
-Key takeaways to document:
+```sql
+SELECT * FROM exercises
+WHERE to_tsvector('english', name) @@ to_tsquery('english', $1)
+AND deleted_at IS NULL
+```
 
-Drizzle never uses SELECT \* — always explicit columns
-Every identifier gets quoted: "users"."id" not users.id
-GROUP BY uses primary key not the selected column — functionally the same but different SQL
-DISTINCT ON is impossible in Drizzle — last-workouts-fixed had to stay raw SQL
+The `'english'` dictionary handles stemming — "squats" matches "squat", "benching" matches "bench press".
 
-When to go around the ORM:
+Supports three search types via `?type=exercise|user|session`.
 
-DISTINCT ON queries
-Window functions
-Complex CTEs
-Any query where you need Postgres-specific syntax
+---
+
+### Pagination
+
+`GET /api/sessions?user_id=1&page=2&limit=10`
+
+Offset calculated in JavaScript before the query:
+
+```ts
+const offset = (Number(page) - 1) * Number(limit);
+```
+
+Response includes `total` from a separate COUNT query so the frontend knows the total number of pages.
+
+---
+
+### Window Functions & Personal Records
+
+`DISTINCT ON (exercise_id)` with `ORDER BY weight DESC` returns the heaviest lift per exercise per user in a single query — no subqueries, no application-level grouping.
+
+```sql
+SELECT DISTINCT ON (exercise_id)
+  ws.exercise_id,
+  e.name AS exercise,
+  ws.weight AS personal_record
+FROM workout_sessions ws
+JOIN exercises e ON e.id = ws.exercise_id
+WHERE ws.user_id = $1 AND ws.deleted_at IS NULL
+ORDER BY ws.exercise_id, ws.weight DESC
+```
+
+---
+
+### Soft Deletes
+
+Instead of permanently removing rows, sessions are soft deleted by setting a `deleted_at` timestamp. This preserves data for recovery, audit trails, and undo functionality.
+
+**How it works:**
+
+- Every `SELECT` query filters `WHERE deleted_at IS NULL` — deleted rows are invisible to the app
+- `DELETE /api/sessions/:id` sets `deleted_at = NOW()` — row stays in the database
+- `PATCH /api/sessions/:id/restore` sets `deleted_at = NULL` — row reappears
+
+**Why production apps use this:**
+
+- Account recovery — "reactivate within 30 days" only works if the data still exists
+- Audit trails — financial and healthcare apps legally cannot hard delete records
+- Support tickets — "I accidentally deleted my data" is recoverable
+- Analytics — deleted users still contribute to churn analysis
+
+**The trade-off:** Every query must include `WHERE deleted_at IS NULL`. Miss it once and deleted records show up in your UI.
 
 ---
 
@@ -198,7 +266,7 @@ npm install
 
 # Set up environment variables
 cp .env.example .env
-# Add your DATABASE_URL from Neon and FRONTEND_URL
+# Add your DATABASE_URL from Neon, FRONTEND_URL, and PORT
 
 # Run the server
 npm run dev
