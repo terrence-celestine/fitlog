@@ -164,18 +164,19 @@ app.patch("/api/sessions/:id/restore", async (req, res) => {
   }
 });
 app.get("/api/sessions", async (req, res) => {
-  const { user_id, exercise, limit, page } = req.query;
+  const { user_id, exercise, limit, page, cursor } = req.query;
+  const cursorMode = cursor !== undefined; // ?cursor= (empty) requests page 1 in cursor mode
   try {
     let queryText = `
-        SELECT 
-          ws.id, 
+        SELECT
+          ws.id,
           ws.user_id,
           ws.exercise_id,
-          e.name AS exercise, 
-          e.muscle_group AS "muscleGroup", 
-          ws.sets, 
-          ws.reps, 
-          ws.weight, 
+          e.name AS exercise,
+          e.muscle_group AS "muscleGroup",
+          ws.sets,
+          ws.reps,
+          ws.weight,
           ws.created_at AS "createdAt"
         FROM workout_sessions ws
         JOIN exercises e ON e.id = ws.exercise_id
@@ -200,24 +201,58 @@ app.get("/api/sessions", async (req, res) => {
       }
     }
 
+    if (cursor) {
+      // keyset pagination: (created_at, id) is a stable, unique ordering key
+      const [cursorCreatedAt, cursorId] = Buffer.from(String(cursor), "base64")
+        .toString("utf-8")
+        .split("|");
+      queryParams.push(cursorCreatedAt, Number(cursorId));
+      conditions.push(
+        `(ws.created_at, ws.id) < ($${queryParams.length - 1}, $${queryParams.length})`,
+      );
+    }
+
     if (conditions.length > 0) {
       queryText += " WHERE " + conditions.join(" AND ");
     }
 
-    queryText += " ORDER BY ws.created_at DESC";
-    if (page) {
-      const offset = (Number(page) - 1) * Number(limit);
-      queryParams.push(offset);
-      queryText += ` OFFSET $${queryParams.length}`;
-    }
+    // id tiebreaker keeps ordering deterministic when created_at collides
+    queryText += " ORDER BY ws.created_at DESC, ws.id DESC";
 
-    if (limit) {
-      const limitNumber = Number(limit);
-      queryParams.push(limitNumber);
+    const limitNumber = Number(limit) || 20;
+
+    if (cursorMode) {
+      // fetch one extra row so we know whether a next page exists
+      queryParams.push(limitNumber + 1);
       queryText += ` LIMIT $${queryParams.length}`;
+    } else {
+      if (page) {
+        const offset = (Number(page) - 1) * limitNumber;
+        queryParams.push(offset);
+        queryText += ` OFFSET $${queryParams.length}`;
+      }
+      if (limit) {
+        queryParams.push(limitNumber);
+        queryText += ` LIMIT $${queryParams.length}`;
+      }
     }
 
     const user_session = await pool.query(queryText, queryParams);
+    let rows = user_session.rows;
+
+    if (cursorMode) {
+      let nextCursor: string | null = null;
+      if (rows.length > limitNumber) {
+        rows = rows.slice(0, limitNumber);
+        const last = rows[rows.length - 1];
+        nextCursor = Buffer.from(
+          `${new Date(last.createdAt).toISOString()}|${last.id}`,
+        ).toString("base64");
+      }
+      res.status(200).json({ sessions: rows, limit: limitNumber, nextCursor });
+      return;
+    }
+
     const countResult = await pool.query(
       `SELECT COUNT(*) FROM workout_sessions ws
        JOIN exercises e ON e.id = ws.exercise_id
@@ -227,7 +262,7 @@ app.get("/api/sessions", async (req, res) => {
 
     const total = countResult.rows[0];
     res.status(200).json({
-      sessions: user_session.rows,
+      sessions: rows,
       total: Number(total.count),
       page: Number(page),
       limit: Number(limit),

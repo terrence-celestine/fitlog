@@ -1,0 +1,1 @@
+CREATE INDEX "users_name_fts_idx" ON "users" USING gin (to_tsvector('english', "name"));

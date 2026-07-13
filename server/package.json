@@ -13,6 +13,7 @@
     "db:seed-users": "ts-node db/seed-users.ts",
     "db:seed-exercises": "ts-node db/seed-exercises.ts",
     "db:seed-sessions": "ts-node db/seed-sessions.ts",
+    "db:benchmark-search": "ts-node db/benchmark-search.ts",
     "db:studio": "drizzle-kit studio"
   },
   "keywords": [],
