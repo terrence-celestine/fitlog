@@ -404,20 +404,24 @@ app.get("/api/personal-records", async (req, res) => {
   }
   try {
     const personal_records = await pool.query(
-      `SELECT DISTINCT ON (exercise_id)
-        ws.user_id,
-        ws.exercise_id,
-        e.name AS exercise,
-        e.muscle_group,
-        ws.weight AS personal_record,
-        ws.sets,
-        ws.reps,
-        ws.created_at
-      FROM workout_sessions ws
-      JOIN exercises e ON e.id = ws.exercise_id
-      WHERE ws.user_id = $1
-      AND ws.deleted_at IS NULL
-      ORDER BY ws.exercise_id, ws.weight DESC`,
+      `SELECT user_id, exercise_id, exercise, muscle_group, rank, weight, sets, reps, created_at 
+        FROM (
+          SELECT
+            ws.user_id,
+            ws.exercise_id,
+            e.name AS exercise,
+            e.muscle_group,
+            RANK() OVER (PARTITION BY ws.exercise_id ORDER BY ws.weight DESC) AS rank,
+            ws.weight,
+            ws.sets,
+            ws.reps,
+            ws.created_at
+          FROM workout_sessions ws
+          JOIN exercises e ON e.id = ws.exercise_id
+          WHERE ws.user_id = $1
+          AND ws.deleted_at IS NULL
+    ) AS pr_rank
+      WHERE rank = 1`,
       [Number(user_id)],
     );
     res.status(200).json(personal_records.rows);
