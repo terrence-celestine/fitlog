@@ -273,26 +273,34 @@ app.get("/api/sessions", async (req, res) => {
   }
 });
 // GET /leaderboard — top 20 users ranked by total sessions this week
-app.get("/api/leaderboard", async (req, res) => {
+app.get("/api/leaderboard", async (_, res) => {
   try {
-    const all_users = await db
-      .select({
-        id: users.id,
-        name: users.name,
-        total_sessions: count(workout_sessions.id),
-      })
-      .from(users)
-      .leftJoin(workout_sessions, eq(users.id, workout_sessions.user_id))
-      .where(isNull(workout_sessions.deleted_at))
-      .groupBy(users.id)
-      .orderBy(desc(count(workout_sessions.id)))
-      .limit(20);
-    res.status(200).json(all_users);
+    await pool.query(`CREATE MATERIALIZED VIEW IF NOT EXISTS mv_leaderboard AS SELECT
+      users.id,
+      users.name,
+      COUNT(workout_sessions.id) AS total_sessions
+    FROM users
+    LEFT JOIN workout_sessions ON users.id = workout_sessions.user_id
+    WHERE workout_sessions.deleted_at IS NULL
+    GROUP BY users.id
+    ORDER BY total_sessions DESC
+    LIMIT 20;`)
+    const result = await pool.query(`SELECT * FROM mv_leaderboard`);
+    res.status(200).json(result.rows);
   } catch (error) {
     console.error("There was an error getting the leaderboard", error);
     res.status(500).json({ error: "Internal server error" });
   }
 });
+app.get("/api/leaderboard/refresh", async (_,res) => {
+  try {
+    await pool.query(`REFRESH MATERIALIZED VIEW IF EXISTS mv_leaderboard`);
+    res.status(200).json({ message: "Leaderboard refreshed successfully" });
+  } catch (error) {
+    console.error("There was an error refreshing the leaderboard", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+})
 app.get("/api/users/last-workouts", async (req, res) => {
   try {
     const all_users = await pool.query("SELECT * FROM users");
