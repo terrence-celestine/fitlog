@@ -12,7 +12,7 @@ app.use(
   }),
 ); // allow CORS requests
 app.use(express.json()); // parse JSON
-const db = drizzle(pool, { logger: false });
+const db = drizzle(pool, { logger: true });
 // GET /api/pool-stats — get the pool stats
 app.get("/api/pool-stats", (_, res) => {
   res.status(200).json({
@@ -275,18 +275,15 @@ app.get("/api/sessions", async (req, res) => {
 // GET /leaderboard — top 20 users ranked by total sessions this week
 app.get("/api/leaderboard", async (_, res) => {
   try {
-    await pool.query(`CREATE MATERIALIZED VIEW IF NOT EXISTS mv_leaderboard AS SELECT
-      users.id,
-      users.name,
-      COUNT(workout_sessions.id) AS total_sessions
-    FROM users
-    LEFT JOIN workout_sessions ON users.id = workout_sessions.user_id
-    WHERE workout_sessions.deleted_at IS NULL
-    GROUP BY users.id
-    ORDER BY total_sessions DESC
-    LIMIT 20;`)
-    const result = await pool.query(`SELECT * FROM mv_leaderboard`);
-    res.status(200).json(result.rows);
+    const result = await db.select({
+      id: users.id,
+      user_name: users.name,
+      total_sessions: count(workout_sessions.id).as("total_sessions")
+    }).from(users).leftJoin(workout_sessions, and(eq(users.id, workout_sessions.user_id), isNull(workout_sessions.deleted_at)))
+    .groupBy(users.id, users.name).orderBy(desc(count(workout_sessions.id))).limit(20).toSQL();
+    console.log(result)
+  
+    res.status(200).json(result);
   } catch (error) {
     console.error("There was an error getting the leaderboard", error);
     res.status(500).json({ error: "Internal server error" });
