@@ -280,9 +280,7 @@ app.get("/api/leaderboard", async (_, res) => {
       user_name: users.name,
       total_sessions: count(workout_sessions.id).as("total_sessions")
     }).from(users).leftJoin(workout_sessions, and(eq(users.id, workout_sessions.user_id), isNull(workout_sessions.deleted_at)))
-    .groupBy(users.id, users.name).orderBy(desc(count(workout_sessions.id))).limit(20).toSQL();
-    console.log(result)
-  
+    .groupBy(users.id, users.name).orderBy(desc(count(workout_sessions.id))).limit(20)  
     res.status(200).json(result);
   } catch (error) {
     console.error("There was an error getting the leaderboard", error);

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-type Rank = { id: number; name: string; total_sessions: number };
+type Rank = { id: number; user_name: string; total_sessions: number };
 
 const medal = ["🥇", "🥈", "🥉"];
 
@@ -119,7 +119,7 @@ const Leaderboard = () => {
               {/* Name + progress bar */}
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold text-zinc-100">
-                  {row.name}
+                  {row.user_name}
                 </p>
                 <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-zinc-800">
                   <div
